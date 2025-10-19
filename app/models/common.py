@@ -1,3 +1,5 @@
+# API 전체에서 공통으로 쓰이는 스키마 모아둔 곳
+
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 from datetime import datetime
