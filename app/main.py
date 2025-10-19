@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-form fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse
 
 from app.routes import plans, deploy, status, destroy
 
