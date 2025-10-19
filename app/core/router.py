@@ -12,11 +12,10 @@ _RULES = {
     ("dev", "low", "web"): "web_dev_low_v1",
     ("dev", "weekend", "web"): "web_dev_weekend_v1",
 }
-
 _DEFAULT_MODEL = "default_fallback_v1"
 
-def select_router(context: MCPContext) -> Tuple[str, str]:
+def select_route(context: MCPContext) -> Tuple[str, str]:
     key = (context.runtime_env, context.time_slot, context.service_type)
     model_version = _RULES.get(key, _DEFAULT_MODEL)
     path = "forecast_24h"
-    return path, model_version
+    return model_version, path

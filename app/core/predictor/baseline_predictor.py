@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from app.modles.common import MCPContext, PredictionResult, PredictionPoint
+from app.models.common import MCPContext, PredictionResult, PredictionPoint
 from .base import BasePredictor
 
 

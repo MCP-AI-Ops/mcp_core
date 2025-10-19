@@ -1,6 +1,9 @@
 from fastapi import APIRouter
 from datetime import datetime
 
+from app.core.predictor.baseline_predictor import BaselinePredictor
+from app.core.predictor.lstm_predictor import LSTMPredictor
+
 from app.models.plans import PlansRequest, PlansResponse
 from app.core.context_extractor import extract_context
 from app.core.router import select_route
