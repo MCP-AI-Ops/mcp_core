@@ -27,10 +27,6 @@ app/core/predictor/data_sources/
 app/core/errors.py                    (에러 클래스 추가)
 app/core/predictor/lstm_predictor.py  (더미 제거, 데이터 소스 연동)
 app/core/predictor/baseline_predictor.py (통계 기반 + 폴백 역할)
-```
-
-### 3️⃣ **추가 필요한 파일**
-```
 data/lstm_ready_cluster_data.csv      (BigQuery 전처리 데이터)
 models/best_mcp_lstm_model.h5         (LSTM 모델)
 models/mcp_model_metadata.pkl         (스케일러 메타데이터)
@@ -130,11 +126,6 @@ def get_data_source():
 ### **3. app/core/predictor/lstm_predictor.py**
 
 #### 주요 변경사항:
-
-##### ❌ **제거된 것:**
-- `_generate_dummy_data()` 함수 (삭제)
-- `_generate_dummy_prediction()` 함수 (삭제)
-- 모델 로드 실패 시 더미 반환 로직 (삭제)
 
 ##### ✅ **추가된 것:**
 - 데이터 소스 연동 (`get_data_source()`)
@@ -325,12 +316,6 @@ predictor.data_source = test_source
 - 사용자는 항상 예측값 받음
 
 ---
-
-## 🚀 다음 단계
-
-### **즉시 필요:**
-1. ✅ `data/lstm_ready_cluster_data.csv` 파일 추가
-2. ✅ `models/` 폴더에 모델 파일 추가
 
 ### **테스트:**
 ```bash
