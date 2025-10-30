@@ -6,3 +6,12 @@ class ModelValidationError(RuntimeError):
 
 class PredictionError(RuntimeError):
     pass
+
+class DataSourceError(RuntimeError):
+    pass
+
+class DataNotFoundError(DataSourceError):
+    pass
+
+class PredictionError(RuntimeError):
+    pass
