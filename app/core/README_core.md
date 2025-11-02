@@ -43,7 +43,9 @@ app/
     ...                    # Pydantic 요청/응답 스키마
   config/
     settings.py            # ENV, 경로, DB 정보 등
+```
 
+```
 POST /plans
 {
   "service_id": "svc-1",
@@ -57,7 +59,9 @@ POST /plans
     "weight": 1.0
   }
 }
+```
 
+```
 {
   "prediction": {
     "service_id": "svc-1",
@@ -75,3 +79,4 @@ POST /plans
   "generated_at": "2025-10-19T12:00:05Z",
   "notes": "(mock) cost/flavor rule 기반 산정"
 }
+```
