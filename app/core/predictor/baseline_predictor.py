@@ -1,9 +1,10 @@
 """
 Baseline Predictor
-간단한 통계 기반 예측 + 폴백(fallback) 역할
+간단한 통계 기반 예측과 폴백 로직을 제공한다.
 """
 
 from datetime import datetime, timedelta
+
 import numpy as np
 
 from app.models.common import MCPContext, PredictionResult, PredictionPoint
@@ -13,113 +14,95 @@ from app.core.errors import DataNotFoundError
 
 
 class BaselinePredictor(BasePredictor):
-    """
-    통계 기반 간단 예측기
-    - LSTM 대비 성능 비교용
-    - 데이터 없거나 에러 시 폴백용
-    """
-    
-    def __init__(self):
-        """데이터 소스 초기화"""
+    """최근 데이터의 통계값으로 24시간 예측을 생성한다."""
+
+    def __init__(self) -> None:
         try:
             self.data_source = get_data_source()
-            print("✅ Baseline Predictor initialized")
-        except Exception as e:
-            print(f"⚠️ Data source unavailable: {e}")
+            print("[정보] Baseline Predictor 초기화 완료")
+        except Exception as exc:
+            print(f"[경고] 데이터 소스를 초기화할 수 없음: {exc}")
             self.data_source = None
-    
+
     def run(
         self,
         *,
         service_id: str,
         metric_name: str,
         ctx: MCPContext,
-        model_version: str
+        model_version: str,
     ) -> PredictionResult:
-        """간단한 통계 기반 예측"""
-        
-        # 1. 데이터 조회 시도
         try:
             if self.data_source is not None:
-                recent_data = self.data_source.fetch_historical_data(
+                recent = self.data_source.fetch_historical_data(
                     service_id=service_id,
                     metric_name=metric_name,
-                    hours=24
+                    hours=24,
                 )
                 return self._statistical_prediction(
-                    service_id, metric_name, ctx, model_version, recent_data
+                    service_id, metric_name, ctx, model_version, recent
                 )
-        except (DataNotFoundError, Exception) as e:
-            print(f"⚠️ Data fetch failed: {e}, using fallback")
-        
-        # 2. 데이터 없으면 더미 예측
+        except (DataNotFoundError, Exception) as exc:
+            print(f"[경고] 데이터 수집 실패: {exc}, 폴백 경로 사용")
+
         return self._fallback_prediction(service_id, metric_name, ctx, model_version)
-    
+
     def _statistical_prediction(
         self,
         service_id: str,
         metric_name: str,
         ctx: MCPContext,
         model_version: str,
-        recent_data: np.ndarray
+        recent_data: np.ndarray,
     ) -> PredictionResult:
-        """실제 데이터 기반 통계 예측"""
-        
-        # 통계 계산
         avg = float(recent_data.mean())
         std = float(recent_data.std())
         last_value = float(recent_data[-1])
         trend = float(recent_data[-1] - recent_data[0]) / len(recent_data)
-        
-        print(f"📊 Stats: avg={avg:.2f}, std={std:.2f}, trend={trend:.2f}")
-        
-        # Context에 따라 기울기 조정
+
+        print(
+            f"[디버그] 통계값: 평균={avg:.2f}, 표준편차={std:.2f}, 추세={trend:.2f}"
+        )
+
         if ctx.time_slot == "peak":
             slope_factor = 1.2
         elif ctx.time_slot == "low":
             slope_factor = 0.8
         else:
             slope_factor = 1.0
-        
-        # 예측 생성
+
         now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-        preds = []
-        
-        for k in range(1, 25):
-            value = last_value + (trend * k * slope_factor)
+        predictions = []
+
+        for step in range(1, 25):
+            value = last_value + trend * step * slope_factor
             noise = np.random.normal(0, std * 0.05)
             value = max(0, value + noise)
-            
+
             if metric_name == "total_events":
                 value = round(value)
-            
-            preds.append(
-                PredictionPoint(
-                    time=now + timedelta(hours=k),
-                    value=float(value)
-                )
+
+            predictions.append(
+                PredictionPoint(time=now + timedelta(hours=step), value=float(value))
             )
-        
+
         return PredictionResult(
             service_id=service_id,
             metric_name=metric_name,
             model_version=f"{model_version}_statistical",
             generated_at=datetime.utcnow(),
-            predictions=preds
+            predictions=predictions,
         )
-    
+
     def _fallback_prediction(
         self,
         service_id: str,
         metric_name: str,
         ctx: MCPContext,
-        model_version: str
+        model_version: str,
     ) -> PredictionResult:
-        """데이터 없을 때 더미 예측"""
-        
-        print("⚠️ Using fallback prediction (no data)")
-        
-        # metric별 기본값
+        print("[경고] 데이터 부족으로 폴백 예측 실행")
+
         if metric_name == "total_events":
             base = 50.0
             slope = 0.5
@@ -129,33 +112,29 @@ class BaselinePredictor(BasePredictor):
         else:
             base = 10.0
             slope = 0.1
-        
-        # Context에 따라 기울기 조정
+
         if ctx.time_slot == "peak":
             slope *= 2
         elif ctx.time_slot == "low":
             slope *= 0.5
-        
+
         now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-        preds = []
-        
-        for k in range(1, 25):
-            value = base + slope * k
-            
+        predictions = []
+
+        for step in range(1, 25):
+            value = base + slope * step
+
             if metric_name == "total_events":
                 value = round(value)
-            
-            preds.append(
-                PredictionPoint(
-                    time=now + timedelta(hours=k),
-                    value=float(value)
-                )
+
+            predictions.append(
+                PredictionPoint(time=now + timedelta(hours=step), value=float(value))
             )
-        
+
         return PredictionResult(
             service_id=service_id,
             metric_name=metric_name,
             model_version=f"{model_version}_fallback",
             generated_at=datetime.utcnow(),
-            predictions=preds
+            predictions=predictions,
         )

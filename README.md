@@ -1,461 +1,189 @@
-# 📋 수정 내용 요약
+# MCP Core Orchestrator
 
-## 🎯 전체 변경 개요
-
-**목적:** CSV/MySQL 데이터 소스를 추상화하고, LSTM과 Baseline의 역할을 명확히 분리
-
-**핵심 철학:**
-- ✅ LSTM: 진짜 모델만 담당, 실패 시 예외 발생
-- ✅ Baseline: 통계 기반 예측 + 폴백(fallback) 역할
-- ✅ Data Sources: CSV/MySQL 자동 전환 (환경변수로 제어)
+FastAPI 기반 MCP Core는 사용자가 업로드한 GitHub 레포지토리의 실행 정보를 분석해 `/plans` 응답으로 서비스별 CPU·Memory 사용량을 예측해 전달한다. 컨텍스트 구조화 → 서비스 라우팅 → 예측 엔진(LSTM/Baseline) 실행 → 정책 후처리 → 이상 알림 순으로 파이프라인이 구성된다.
 
 ---
 
-## 📁 변경된 파일 목록
+## 1. 전체 처리 흐름
+1. 클라이언트가 `/plans` 엔드포인트로 예측 요청을 전송한다.  
+2. `context_extractor`가 `context` JSON을 `MCPContext` 모델로 검증한다.  
+3. `router`가 서비스 타입·런타임 환경을 기준으로 모델 버전을 선택한다.  
+4. `predictor`가 선택된 엔진(LSTM 또는 Baseline)으로 24시간 시계열을 생성한다.  
+5. `policy`가 가중치·클램프·이상 탐지·Discord 알림을 적용한다.  
+6. `/plans` 응답으로 예측 결과, 권장 플래이버, 예상 비용을 반환한다.  
 
-### 1️⃣ **새로 추가된 파일**
-```
-app/core/predictor/data_sources/
-├── __init__.py          (새로 생성)
-├── base.py              (새로 생성)
-├── csv_source.py        (새로 생성)
-└── factory.py           (새로 생성)
-```
-
-### 2️⃣ **수정된 파일**
-```
-app/core/errors.py                    (에러 클래스 추가)
-app/core/predictor/lstm_predictor.py  (더미 제거, 데이터 소스 연동)
-app/core/predictor/baseline_predictor.py (통계 기반 + 폴백 역할)
-data/lstm_ready_cluster_data.csv      (BigQuery 전처리 데이터)
-models/best_mcp_lstm_model.h5         (LSTM 모델)
-models/mcp_model_metadata.pkl         (스케일러 메타데이터)
-```
+> `/plans` 응답 스키마는 배포 파이프라인과의 계약으로 간주되므로 임의 변경을 지양한다.
 
 ---
 
-## 🔧 상세 변경 내용
+## 2. 데이터 파이프라인 및 메타데이터
+- 원본 CSV: `data/lstm_ready_cluster_data.csv` (1,439행 × 84컬럼)  
+- 모델: `models/best_mcp_lstm_model.h5`  
+- 메타데이터: `models/mcp_model_metadata.pkl`  
+  * `sequence_length = 24` (24시간 윈도우)  
+  * `feature_names` 82개, `scaler`, `target_scaler`, `use_log_transform` 플래그 포함  
+- lookback 길이를 변경할 경우 노트북/스크립트에서 재학습하여 모델·메타데이터·CSV를 동시에 업데이트해야 한다.
 
-### **1. app/core/errors.py**
+---
 
-#### 변경 전:
-```python
-class ContextVaidationError(ValueError):
-    pass
+## 3. 데이터 전처리 규칙
+### 3.1 결측치 처리 대응
+- **Feature 컬럼**: forward-fill 후 남은 값은 0으로 채운다.  
+- **Target 컬럼**: 음수 값은 0으로 클리핑하고, 로그 변환(`log1p`) 적용 시 결측 처리 규칙을 동일하게 따른다.
 
-class ModelValidationError(RuntimeError):
-    pass
+### 3.2 이상치 처리 규칙
+- 학습 스크립트(`train_from_notebook.py`)에서 **IQR 기반 Winsorize** 적용:  
+  * 1사분위(Q1)와 3사분위(Q3)를 이용해 IQR을 계산  
+  * 하한 = Q1 - 3×IQR, 상한 = Q3 + 3×IQR  
+  * 범위를 벗어난 값은 하한/상한으로 클램프  
+- 서빙 단계에서는 `policy`에서 예측값을 0~1 사이로 clamp(정규화된 지표 기준)하고, 이상 탐지는 Z-score 기반으로 수행한다.
 
-class PredictionError(RuntimeError):
-    pass
+### 3.3 평균 보간 및 Winsorize
+- 일부 보조 지표(예: 평균 CPU)에서 짧은 구간이 비어 있을 경우 forward-fill과 0 보간을 조합한다.  
+- 극단값 처리를 위해 상·하한을 이동 평균 기반으로 다듬는 경우 추가 Winsorize(5%/95%)를 선택적으로 적용한다. 이는 노트북 실험 시 파라미터로 조정 가능하다.
+
+---
+
+## 4. 디렉터리 구조 (요약)
 ```
-
-#### 변경 후:
-```python
-class ContextVaidationError(ValueError):
-    pass
-
-class ModelValidationError(RuntimeError):
-    pass
-
-class PredictionError(RuntimeError):
-    pass
-
-# 새로 추가 ↓
-class DataSourceError(RuntimeError):
-    """데이터 소스 오류"""
-    pass
-
-class DataNotFoundError(DataSourceError):
-    """데이터 없음"""
-    pass
-
-class PredictionError(RuntimeError):
-    """예측 실패"""
-    pass
+app/
+  core/
+    context_extractor.py   # 컨텍스트 → MCPContext 변환
+    router.py              # 서비스 라우팅
+    policy.py              # 가중치/클램프/이상 탐지/Discord 알림
+    predictor/
+      base.py              # Predictor 추상 클래스
+      baseline_predictor.py# 통계 기반 + 폴백
+      lstm_predictor.py    # LSTM 예측 엔진
+      data_sources/
+        base.py            # 데이터 소스 추상화
+        csv_source.py      # CSV 데이터 소스
+        mysql_source.py    # SQLAlchemy 기반 MySQL 데이터 소스
+        factory.py         # 환경 변수로 데이터 소스 선택
+  routes/plans.py          # /plans 라우터
+models/                    # 학습된 모델 및 메타데이터
+data/                      # 예측 입력 CSV
+docs/operations_update.md  # 작업 이력 및 운영 가이드
 ```
 
 ---
 
-### **2. app/core/predictor/data_sources/ (새로 생성)**
-
-#### **목적:**
-데이터 조회를 추상화하여 CSV ↔ MySQL 쉽게 전환
-
-#### **파일 설명:**
-
-##### `base.py`
-```python
-# 데이터 소스의 인터페이스 정의
-class DataSource(ABC):
-    def fetch_historical_data(...) -> np.ndarray:
-        """최근 N시간 데이터 조회"""
-        pass
-    
-    def is_available() -> bool:
-        """사용 가능 여부"""
-        pass
+## 5. 데이터 소스 전환
+### CSV (기본값)
 ```
-
-##### `csv_source.py`
-```python
-# CSV 파일에서 데이터 읽기
-class CSVDataSource(DataSource):
-    def __init__(self, csv_path="data/lstm_ready_cluster_data.csv"):
-        self.df = pd.read_csv(csv_path)
-    
-    def fetch_historical_data(service_id, metric_name, hours=168):
-        # CSV에서 최근 168시간 데이터 반환
-        return self.df[metric_name].values[-hours:]
-```
-
-##### `factory.py`
-```python
-# 환경변수에 따라 CSV/MySQL 자동 선택
-def get_data_source():
-    source_type = os.getenv("DATA_SOURCE_TYPE", "csv")
-    
-    if source_type == "csv":
-        return CSVDataSource()
-    elif source_type == "mysql":
-        return MySQLDataSource()  # Phase 2
-```
-
----
-
-### **3. app/core/predictor/lstm_predictor.py**
-
-#### 주요 변경사항:
-
-##### ✅ **추가된 것:**
-- 데이터 소스 연동 (`get_data_source()`)
-- 실패 시 `PredictionError` 예외 발생
-- 메타데이터 구조 지원 (딕셔너리 or 스케일러 객체)
-
-#### 변경 전:
-```python
-def run(...):
-    # 데이터 없으면 더미 생성
-    historical_data = self._generate_dummy_data(168)
-    
-    # 모델 없으면 더미 예측 반환
-    if self.base_model is None:
-        return self._generate_dummy_prediction(...)
-```
-
-#### 변경 후:
-```python
-def run(...):
-    # 모델 없으면 예외 발생
-    if self.model is None:
-        raise PredictionError("LSTM model not loaded")
-    
-    # 데이터 소스에서 조회 (실패 시 예외 발생)
-    historical_data = self.data_source.fetch_historical_data(
-        service_id=service_id,
-        metric_name=metric_name,
-        hours=168
-    )
-```
-
----
-
-### **4. app/core/predictor/baseline_predictor.py**
-
-#### 주요 변경사항:
-
-##### ✅ **새로운 역할:**
-1. **통계 기반 예측**: 실제 데이터로 이동평균 예측
-2. **폴백(fallback)**: 데이터 없거나 LSTM 실패 시 더미 예측
-
-#### 변경 전:
-```python
-def run(...):
-    base = 0.3
-    slope = 0.01 if ctx.time_slot in ("normal", "low") else 0.02
-    
-    for k in range(1, 25):
-        preds.append(
-            PredictionPoint(
-                time=now + timedelta(hours=k),
-                value=base + slope * k
-            )
-        )
-```
-
-#### 변경 후:
-```python
-def run(...):
-    # 1. 데이터 있으면 통계 예측
-    try:
-        recent_data = self.data_source.fetch_historical_data(...)
-        return self._statistical_prediction(...)  # 평균/트렌드 기반
-    except:
-        # 2. 데이터 없으면 더미 예측
-        return self._fallback_prediction(...)
-
-def _statistical_prediction(..., recent_data):
-    """실제 데이터 기반 통계 예측"""
-    avg = recent_data.mean()
-    trend = (recent_data[-1] - recent_data[0]) / len(recent_data)
-    
-    for k in range(1, 25):
-        value = last_value + trend * k  # 트렌드 반영
-
-def _fallback_prediction(...):
-    """데이터 없을 때 더미 예측"""
-    # metric별 기본값 사용
-    if metric_name == "total_events":
-        base = 50.0
-```
-
----
-
-## 🔄 실행 흐름 변화
-
-### **변경 전:**
-```
-요청
- ↓
-LSTM Predictor
- ├─ 모델 있음? → 예측
- └─ 모델 없음? → 더미 반환
-```
-
-### **변경 후:**
-```
-요청
- ↓
-LSTM Predictor (try)
- ├─ 모델 로드 성공
- │   ├─ CSV/MySQL에서 데이터 조회
- │   └─ 예측 실행
- │
- └─ 실패 (PredictionError) → Baseline으로 폴백
-     ├─ 데이터 있음? → 통계 예측
-     └─ 데이터 없음? → 더미 예측
-```
-
----
-
-## 🎯 예상 동작 시나리오
-
-### **시나리오 1: 정상 (LSTM + CSV)**
-```
-1. 요청: /plans (service_id=cluster, metric_name=total_events)
-2. LSTM 실행
-   ├─ CSV에서 168시간 데이터 로드
-   ├─ 전처리 (스케일링)
-   ├─ LSTM 모델 예측
-   └─ 24시간 예측값 반환
-3. 응답: [42, 45, 48, ..., 60] (24개 값)
-```
-
-### **시나리오 2: LSTM 실패 → Baseline 폴백**
-```
-1. 요청: /plans
-2. LSTM 실행 → PredictionError (모델 로드 실패)
-3. Baseline 실행
-   ├─ CSV에서 24시간 데이터 로드
-   ├─ 평균/트렌드 계산
-   └─ 통계 기반 예측 반환
-4. 응답: [48, 49, 49, ..., 52] (24개 값)
-```
-
-### **시나리오 3: 데이터도 없음 → 완전 폴백**
-```
-1. 요청: /plans
-2. LSTM 실행 → PredictionError
-3. Baseline 실행
-   ├─ CSV 조회 실패 (파일 없음)
-   └─ 더미 예측 생성
-4. 응답: [50, 50.5, 51, ..., 62] (더미)
-```
-
----
-
-## 📊 파일 크기 비교
-
-| 파일 | 변경 전 | 변경 후 | 변화 |
-|------|---------|---------|------|
-| `lstm_predictor.py` | ~270줄 | ~110줄 | **-160줄** (더미 제거) |
-| `baseline_predictor.py` | ~20줄 | ~140줄 | **+120줄** (통계+폴백) |
-| `data_sources/` | 없음 | ~400줄 | **+400줄** (새로 생성) |
-| **총합** | ~290줄 | ~650줄 | **+360줄** |
-
----
-
-## ✅ 장점
-
-### **1. 유연성**
-```bash
-# CSV 사용 (현재)
-export DATA_SOURCE_TYPE=csv
-
-# MySQL로 전환 (Phase 2)
-export DATA_SOURCE_TYPE=mysql
-```
-→ 코드 수정 없이 환경변수만 변경!
-
-### **2. 역할 분리**
-- **LSTM**: 딥러닝 예측만 담당
-- **Baseline**: 통계 + 폴백 담당
-- **DataSource**: 데이터 조회만 담당
-
-### **3. 테스트 용이**
-```python
-# 테스트 시 Mock 데이터 소스 주입 가능
-test_source = MockDataSource()
-predictor = LSTMPredictor()
-predictor.data_source = test_source
-```
-
-### **4. 에러 처리 명확**
-- LSTM 실패 → `PredictionError` 발생
-- Baseline이 안전하게 처리
-- 사용자는 항상 예측값 받음
-
----
-
-### **테스트:**
-```bash
-# 1. CSV 데이터 확인
-python -c "from app.core.predictor.data_sources import get_data_source; print(get_data_source().get_data_info())"
-
-# 2. LSTM 예측 테스트
-python -c "from app.core.predictor.lstm_predictor import LSTMPredictor; ..."
-
-# 3. API 실행
-uvicorn app.main:app --reload
-```
-
-### **Phase 2 (MySQL 전환):**
-1. MySQL 스키마 설계
-2. `MySQLDataSource` 구현
-3. 환경변수만 변경: `DATA_SOURCE_TYPE=mysql`
-
----
-
-## 📌 요약
-
-| 항목 | 변경 전 | 변경 후 |
-|------|---------|---------|
-| **데이터 조회** | 하드코딩 | 추상화 (CSV/MySQL) |
-| **LSTM 역할** | 예측 + 더미 | 예측만 |
-| **Baseline 역할** | 간단한 더미 | 통계 + 폴백 |
-| **에러 처리** | 더미 반환 | 예외 발생 → 폴백 |
-| **확장성** | 낮음 | 높음 (MySQL 준비) |
-| **코드 품질** | 혼재 | 명확한 분리 |
-
----
-
-## 🎨 아키텍처 다이어그램
-
-### **Before (변경 전)**
-```
-┌─────────────────┐
-│  API Request    │
-└────────┬────────┘
-         │
-    ┌────▼─────┐
-    │  LSTM    │
-    │ (All-in) │
-    └────┬─────┘
-         │
-    ┌────▼──────┐
-    │ Response  │
-    └───────────┘
-```
-
-### **After (변경 후)**
-```
-┌─────────────────┐
-│  API Request    │
-└────────┬────────┘
-         │
-    ┌────▼─────┐      ┌──────────────┐
-    │  LSTM    │◄─────│ DataSource   │
-    │          │      │ (CSV/MySQL)  │
-    └────┬─────┘      └──────────────┘
-         │
-      [실패?]
-         │
-    ┌────▼─────┐      ┌──────────────┐
-    │ Baseline │◄─────│ DataSource   │
-    │ (Fallback)│     │ (CSV/MySQL)  │
-    └────┬─────┘      └──────────────┘
-         │
-    ┌────▼──────┐
-    │ Response  │
-    └───────────┘
-```
-
----
-
-## 📝 환경변수 설정
-
-### **.env 파일 예시**
-```bash
-# Data Source Configuration
-DATA_SOURCE_TYPE=csv
+DATA_SOURCE_BACKEND=csv
 CSV_DATA_PATH=data/lstm_ready_cluster_data.csv
+```
 
-# Model Configuration
-MODEL_DIR=models
+### MySQL (SQLAlchemy + PyMySQL)
+```
+DATA_SOURCE_BACKEND=mysql
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=mcp_user
+MYSQL_PASSWORD=secret
+MYSQL_DATABASE=mcp_core
+MYSQL_TABLE=metric_history
+# MYSQL_SSL_CA=/path/to/ca.pem
+```
+- `mysql+pymysql://` 스킴을 사용하며 `PyMySQL`, `SQLAlchemy` 설치가 필요하다.  
+- `metric_history` 테이블 스키마는 다음과 같다.
+  ```sql
+  CREATE TABLE metric_history (
+      service_id   VARCHAR(128),
+      metric_name  VARCHAR(128),
+      ts           DATETIME,
+      value        DOUBLE,
+      PRIMARY KEY (service_id, metric_name, ts)
+  );
+  ```
+- 조회 결과가 부족하면 가장 오래된 값을 복제해 길이를 맞춘다.
 
-# Phase 2 (MySQL)
-# DATA_SOURCE_TYPE=mysql
-# MYSQL_HOST=localhost
-# MYSQL_PORT=3306
-# MYSQL_USER=root
-# MYSQL_PASSWORD=your_password
-# MYSQL_DATABASE=mcp_db
+---
+
+## 6. 예측 엔진
+| 엔진 | 위치 | 특징 |
+|------|------|------|
+| `LSTMPredictor` | `app/core/predictor/lstm_predictor.py` | TensorFlow 모델 로드, 메타데이터 기반 스케일링 |
+| `BaselinePredictor` | `app/core/predictor/baseline_predictor.py` | 최근 24시간 통계 + 폴백 시나리오 |
+
+`policy` 단계에서 두 엔진 모두 컨텍스트 가중치 및 이상 탐지 처리를 거친 뒤 `/plans` 응답으로 전달된다.
+
+---
+
+## 7. 이상 탐지 및 알림
+- `app/core/anomaly.py`: 최근 168시간을 기준으로 z-score를 계산해 이상 여부를 판단한다.  
+- `policy`가 이상을 감지하면 비동기 스레드로 Discord 알림을 전송한다.  
+- 환경 변수:  
+  * `DISCORD_WEBHOOK_URL` (필수)  
+  * `DISCORD_BOT_NAME` (기본값 `MCP-dangerous`)  
+  * `DISCORD_BOT_AVATAR` (기본값 `https://i.imgur.com/9kY5F5k.png`)  
+- 스크립트 테스트 시 비동기 스레드가 완료될 수 있도록 `time.sleep()` 등으로 약간의 대기 시간을 준다.
+
+---
+
+## 8. 환경 변수 예시 (.env)
+```bash
+# 데이터 소스
+DATA_SOURCE_BACKEND=csv
+CSV_DATA_PATH=data/lstm_ready_cluster_data.csv
+# MYSQL_HOST=...
+# MYSQL_USER=...
+# MYSQL_PASSWORD=...
+# MYSQL_DATABASE=...
+# MYSQL_TABLE=metric_history
+
+# 모델 및 알림 설정
+DISCORD_WEBHOOK_URL=...
+DISCORD_BOT_NAME=MCP-dangerous
+DISCORD_BOT_AVATAR=https://i.imgur.com/9kY5F5k.png
+ANOMALY_Z=3.0
 ```
 
 ---
 
-## 🔍 디버깅 가이드
-
-### **1. CSV 파일 로드 실패**
-```python
-# 확인
-from pathlib import Path
-csv_path = Path("data/lstm_ready_cluster_data.csv")
-print(f"CSV exists: {csv_path.exists()}")
-
-# 해결
-# - 파일 경로 확인
-# - 파일 권한 확인
-```
-
-### **2. LSTM 모델 로드 실패**
-```python
-# 확인
-from pathlib import Path
-model_path = Path("models/best_mcp_lstm_model.h5")
-print(f"Model exists: {model_path.exists()}")
-
-# 해결
-# - 파일명 정확히 일치하는지 확인
-# - TensorFlow 버전 확인 (pip show tensorflow)
-```
-
-### **3. 예측값이 이상함**
-```python
-# 스케일러 확인
-import pickle
-with open("models/mcp_model_metadata.pkl", "rb") as f:
-    meta = pickle.load(f)
-    print(type(meta))  # dict or scaler 객체?
-    if isinstance(meta, dict):
-        print(meta.keys())
-```
-
-**작성자:** 진호  
-**작성일:** 2025-10-30  
-**브랜치:** `data/model`  
-**버전:** 1.0.0
+## 9. 모델 학습 스크립트 (`train_from_notebook.py`)
+- 노트북을 스크립트화하며 다음을 반영했다.
+  1. 스케일러를 train 데이터로만 학습시켜 데이터 누수를 방지.  
+  2. 결측치는 forward-fill 후 0으로 채워 미래 데이터를 사용하지 않음.  
+  3. 체크포인트와 모델, 메타데이터를 모두 `models/`에 저장.  
+  4. CLI 인자를 통해 CSV 경로, 시퀀스 길이, 학습 epoch 등을 조정.  
+- 실행 예시
+  ```bash
+  python app/core/predictor/train_from_notebook.py \
+    --csv-path data/lstm_ready_cluster_data.csv \
+    --sequence-length 24 \
+    --epochs 80 \
+    --batch-size 32
+  ```
+- 학습 후 `models/best_mcp_lstm_model.h5`와 `models/mcp_model_metadata.pkl`이 갱신되어 서빙과 바로 호환된다.
 
 ---
 
-**결론: 깔끔하게 역할이 분리되고, CSV/MySQL 전환이 쉬워졌습니다!** 🎉
+## 10. 테스트 및 검증
+1. **Discord 연동 확인**  
+   ```bash
+   export PYTHONPATH=$PWD
+   export DISCORD_WEBHOOK_URL=...
+   python tests/discord_test.py
+   ```
+2. **이상 탐지 시뮬레이션**  
+   - 예측 범위를 인위적으로 높여 `postprocess_predictions` 호출 시 알림이 도착하는지 확인.  
+3. **데이터 소스 점검**  
+   - CSV: 파일 경로와 권한 확인.  
+   - MySQL: `MySQLDataSource.is_available()` 호출 또는 CLI로 접속 테스트.
+
+---
+
+## 11. 향후 개선 제안
+1. `tests/anomaly_check.py`에 알림 전송 완료까지 대기하는 로직 추가.  
+2. Discord 응답 로그를 중앙 모니터링 시스템(CloudWatch, Prometheus 등)과 연동.  
+3. lookback을 168시간으로 확장할 필요가 생기면 노트북에서 재학습 후 산출물 일괄 갱신.
+
+---
+
+## 12. 참고 문서
+- `docs/operations_update.md`  
+- `demoMCPproject.ipynb`
+
+---

@@ -5,10 +5,12 @@ Data Sources Package
 
 from .base import DataSource
 from .csv_source import CSVDataSource
+from .mysql_source import MySQLDataSource
 from .factory import get_data_source
 
 __all__ = [
     "DataSource",
-    "CSVDataSource", 
+    "CSVDataSource",
+    "MySQLDataSource",
     "get_data_source",
 ]
