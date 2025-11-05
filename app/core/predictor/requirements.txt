@@ -1,0 +1,10 @@
+numpy
+pandas
+tensorflow
+scikit-learn
+matplotlib
+seaborn
+h5py
+pydantic
+fastapi 
+uvicorn
