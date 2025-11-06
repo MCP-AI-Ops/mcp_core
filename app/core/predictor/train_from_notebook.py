@@ -11,17 +11,21 @@ demoMCPproject.ipynb 내용을 기반으로 정리한 모델 학습 스크립트
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import pickle
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import RobustScaler
 from tensorflow.keras import callbacks, layers, regularizers
+
+plt.switch_backend("Agg")
 
 
 DEFAULT_CSV_PATH = Path("data/lstm_ready_cluster_data.csv")
@@ -284,6 +288,39 @@ class CompleteMCPPredictor:
         print("[정보] 학습 완료")
         return history
 
+    def save_history(self, history: tf.keras.callbacks.History) -> None:
+        """학습 이력을 JSON과 PNG 그래프로 저장한다."""
+        history_dict = history.history or {}
+        epochs = list(range(1, len(history_dict.get("loss", [])) + 1))
+
+        history_payload = {
+            "epoch": epochs,
+            "train_loss": history_dict.get("loss", []),
+            "val_loss": history_dict.get("val_loss", []),
+            "train_mae": history_dict.get("mae", []),
+            "val_mae": history_dict.get("val_mae", []),
+        }
+
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        with open(MODELS_DIR / "training_history.json", "w", encoding="utf-8") as fh:
+            json.dump(history_payload, fh, ensure_ascii=False, indent=2)
+        print("[정보] 학습 이력을 training_history.json에 저장")
+
+        if history_payload["train_loss"]:
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.plot(history_payload["epoch"], history_payload["train_loss"], label="train_loss")
+            if history_payload["val_loss"]:
+                ax.plot(history_payload["epoch"], history_payload["val_loss"], label="val_loss")
+            ax.set_xlabel("epoch")
+            ax.set_ylabel("loss")
+            ax.set_title("Training Loss Curve")
+            ax.legend()
+            ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+            fig.tight_layout()
+            fig.savefig(MODELS_DIR / "training_loss.png", dpi=150)
+            plt.close(fig)
+            print("[정보] 학습 곡선을 training_loss.png로 저장")
+
     # ------------------------------------------------------------------
     # 평가 및 산출물 저장
     # ------------------------------------------------------------------
@@ -380,24 +417,22 @@ def main() -> None:
     trainer.load_and_prepare_data(args.csv_path)
     trainer.create_sequences()
     trainer.build_model(learning_rate=args.learning_rate)
-    trainer.train(
+    history = trainer.train(
         epochs=args.epochs,
         batch_size=args.batch_size,
         patience=args.patience,
     )
+    trainer.save_history(history)
     results = trainer.evaluate()
     trainer.save_artifacts()
 
-    print("=" * 80)
     print("[요약] 학습 완료")
     for split, metrics in results.items():
         print(
             f"  {split.upper():>5} → R²={metrics['r2']:.4f}, "
             f"MAE={metrics['mae']:.2f}, MAPE={metrics['mape']:.1f}%"
         )
-    print("=" * 80)
 
 
 if __name__ == "__main__":
     main()
-
