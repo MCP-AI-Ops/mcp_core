@@ -1,0 +1,12 @@
+numpy
+pandas
+tensorflow
+scikit-learn
+matplotlib
+seaborn
+h5py
+pydantic
+fastapi 
+uvicorn
+PyMySQL>=1.1.0
+SQLAlchemy>=2.0
