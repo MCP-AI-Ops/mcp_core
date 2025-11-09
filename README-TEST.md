@@ -132,7 +132,29 @@ CSV_DATA_PATH=data/lstm_ready_cluster_data.csv
 # Discord 알림 (선택)
 DISCORD_WEBHOOK_URL=your_webhook_url
 DISCORD_BOT_NAME=MCP-dangerous
+
+# OpenStack 설정 (VM 배포 시 필요)
+OS_AUTH_URL=http://localhost:5000/v3
+OS_USERNAME=admin
+OS_PASSWORD=secretadmin
+OS_PROJECT_NAME=admin
+OS_REGION_NAME=RegionOne
 ```
+
+### ⚠️ 중요: .env 파일 변경 후 재시작 필요
+
+`.env` 파일을 수정한 후에는 **반드시 서버를 재시작**해야 변경사항이 반영됩니다:
+
+```bash
+# 실행 중인 서버를 중지 (Ctrl+C) 후 다시 시작
+poetry run uvicorn app.main:app --reload
+
+# 또는 poetry shell 사용 시
+poetry env activate
+uvicorn app.main:app --reload
+```
+
+**참고:** `--reload` 옵션은 코드 변경 시 자동 재시작하지만, `.env` 파일 변경은 감지하지 않습니다. 수동으로 재시작해야 합니다.
 
 ## 8. 프로젝트 구조
 
