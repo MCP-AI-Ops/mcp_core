@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.routes import plans, deploy, status, destroy
-from dotenv import load_dotenv
+from app.routes import router_authfrom dotenv import load_dotenv
 load_dotenv()
 
 
@@ -18,7 +18,7 @@ app.include_router(plans.router, prefix="/plans", tags=["plans"])
 app.include_router(deploy.router, prefix="/deploy", tags=["deploy"])
 app.include_router(status.router, prefix="/status", tags=["status"])
 app.include_router(destroy.router, prefix="/destroy", tags=["destroy"])
-
+app.include_router(router_auth.router, prefix="/auth", tags=["auth"])
 
 @app.exception_handler(Exception)
 async def unhandled_ex(request: Request, exc: Exception):
