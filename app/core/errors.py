@@ -1,8 +1,5 @@
 class ContextValidationError(ValueError):
-    """Context validation failed (spelling-corrected).
-
-    We keep an alias `ContextVaidationError` for backward compatibility.
-    """
+    """Context validation failed."""
     pass
 
 
@@ -25,5 +22,3 @@ class DataNotFoundError(DataSourceError):
     pass
 
 
-# Backwards-compatible aliases (old names)
-ContextVaidationError = ContextValidationError

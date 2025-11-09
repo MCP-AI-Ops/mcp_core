@@ -149,3 +149,41 @@ DISCORD_BOT_NAME=MCP-dangerous
 - 이 프로젝트는 `package-mode = false`로 설정되어 있어 의존성 관리만 Poetry로 수행합니다
 - Python 3.10 이상이 필요합니다
 - 가상환경은 Poetry가 자동으로 관리하므로 별도로 생성할 필요가 없습니다
+
+## 10. 현재 사용 버전 상태
+- python: 3.12
+
+## 11. FastAPI 서버 띄우기
+
+구조가 README대로라면 대략:
+
+poetry run uvicorn app.main:app --reload
+
+
+브라우저에서 http://localhost:8000/docs 열어 Swagger UI 들어가지는지 확인
+👉 여기까지 되면 MCP Core를 로컬에서 돌릴 수 있는 상태가 됨.
+
+### /plans Contact 예시
+```
+curl -X 'POST' \
+  'http://localhost:8000/plans' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "service_id": "demo-service",
+  "metric_name": "total_events",
+  "context": {
+    "context_id": "ctx-1234",
+    "timestamp": "2025-11-08T18:44:10.519Z",
+    "service_type": "web",
+    "runtime_env": "prod",
+    "time_slot": "normal",
+    "weight": 1,
+    "region": "ap-northeast-2",
+    "expected_users": 100,
+    "curr_cpu": 0.25,
+    "curr_mem": 0.35
+  }
+}
+'
+```

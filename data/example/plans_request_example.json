@@ -1,0 +1,17 @@
+{
+    "service_id": "demo-service",
+    "metric_name": "total_events",
+    "context": {
+      "context_id": "ctx-1234",
+      "timestamp": "2025-11-08T18:44:10.519Z",
+      "service_type": "web",
+      "runtime_env": "prod",
+      "time_slot": "normal",
+      "weight": 1,
+      "region": "ap-northeast-2",
+      "expected_users": 100,
+      "curr_cpu": 0.25,
+      "curr_mem": 0.35
+    }
+  }
+  

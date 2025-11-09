@@ -1,3 +1,6 @@
 .env
 .venv/
 poetry.lock
+.vscode/
+__pycache__/
+pyrightconfig.json

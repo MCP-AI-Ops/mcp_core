@@ -21,7 +21,7 @@ class BasePredictor(ABC):
     """
 
     @abstractmethod
-    def run(self, *, service_id: str, metric_name: str, context: MCPContext, model_version: str) -> PredictionResult:
+    def run(self, *, service_id: str, metric_name: str, ctx: MCPContext, model_version: str) -> PredictionResult:
         """
         Execute prediction for the given (service_id, metric_name) under context ctx.
 

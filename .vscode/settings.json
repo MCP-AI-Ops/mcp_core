@@ -1,3 +1,9 @@
 {
-    "git.ignoreLimitWarning": true
+  "python.defaultInterpreterPath": "/Users/nahyunee/Library/Caches/pypoetry/virtualenvs/mcp-core-fJ3OK5ZH-py3.12/bin/python",
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}"
+  ],
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.typeCheckingMode": "basic"
 }

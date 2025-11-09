@@ -31,12 +31,23 @@ paramiko = "^3.5.0"
 # 기타 사용할 수 있는 것들 (원하면 빼도 됨)
 pydantic = "^2.9.0"
 
+# Data science & ML
+numpy = "^1.26.0"
+pandas = "^2.2.0"
+tensorflow = "^2.15.0"
+scikit-learn = "^1.4.0"
+
+# Database (선택적 - MySQL 사용 시)
+sqlalchemy = "^2.0.0"
+pymysql = "^1.1.0"
+
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"
 isort = "^5.13.0"
 ruff = "^0.8.0"
 pytest = "^8.3.0"
 mypy = "^1.13.0"
+matplotlib = "^3.8.0"  # 학습 스크립트에서만 사용
 
 [tool.poetry.scripts]
 mcp-core-api = "main:app"
