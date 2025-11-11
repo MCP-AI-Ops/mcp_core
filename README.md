@@ -182,8 +182,48 @@ ANOMALY_Z=3.0
 
 ---
 
-## 12. 참고 문서
+## 12. 사용자 인증 및 관리 (User Authentication)
+
+MCP Core는 사용자 관리 및 클라우드 계정 통합을 위한 MySQL 기반 인증 시스템을 제공한다.
+
+### 12.1 데이터베이스 스키마
+- **위치**: `database/schemas/001_users_authentication.sql`
+- **주요 테이블**:
+  - `users`: 사용자 정보, 인증, 클라우드 계정 통합
+  - `user_sessions`: 세션 관리
+  - `password_reset_tokens`: 비밀번호 재설정
+  - `email_verification_tokens`: 이메일 인증
+  - `user_audit_log`: 감사 로그
+
+### 12.2 지원 클라우드 제공자
+- AWS, Azure, GCP, Alibaba Cloud, Oracle Cloud, IBM Cloud
+
+### 12.3 초기 설정
+```bash
+# 환경 변수 설정
+export MYSQL_HOST=localhost
+export MYSQL_USER=mcp_user
+export MYSQL_PASSWORD=your_password
+export MYSQL_DATABASE=mcp_core
+
+# 스키마 초기화
+python database/init_db.py
+```
+
+### 12.4 보안 기능
+- 비밀번호 해싱 (bcrypt/argon2)
+- API 키 관리
+- 2단계 인증 (TOTP)
+- 세션 관리
+- 감사 로그
+
+자세한 내용은 `database/README.md`를 참조한다.
+
+---
+
+## 13. 참고 문서
 - `docs/operations_update.md`  
 - `demoMCPproject.ipynb`
+- `database/README.md` (사용자 관리)
 
 ---
