@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-core"
+version = "0.1.0"
+description = "MCP Core orchestrator: context -> routing -> prediction -> policy -> alert"
+readme = "README.md"
+authors = [{name="MCP AI Ops"}]
+license = {text = "Proprietary"}
+requires-python = ">=3.11"
+keywords = ["MCP", "orchestrator", "prediction", "anomaly"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Framework :: FastAPI",
+  "Topic :: System :: Monitoring"
+]
+
+# 최소 의존성 (훈련/서빙 분리 가능)
+dependencies = [
+  "numpy",
+  "pandas",
+  "tensorflow",
+  "scikit-learn",
+  "matplotlib",
+  "seaborn",
+  "h5py",
+  "pydantic",
+  "fastapi",
+  "uvicorn",
+  "PyMySQL>=1.1.0",
+  "SQLAlchemy>=2.0"
+]
+
+[project.optional-dependencies]
+train = ["jupyter", "ipywidgets"]
+alert = ["requests"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-q"
