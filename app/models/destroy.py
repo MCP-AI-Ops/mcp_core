@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 class DestroyRequest(BaseModel):
-    service_id: str
+    github_url: str
     instance_id: str
 
 class DestroyResponse(BaseModel):

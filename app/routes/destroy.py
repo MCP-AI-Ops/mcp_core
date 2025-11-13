@@ -7,4 +7,4 @@ router = APIRouter()
 def destroy(req: DestroyRequest):
     # TODO: openstack_adapter 통해 자원 삭제
     # 지금은 더미
-    return DestroyResponse(ok=True, message=f"Destroyed {req.instance_id} for {req.service_id} (mock)")
+    return DestroyResponse(ok=True, message=f"Destroyed {req.instance_id} for {req.github_url} (mock)")

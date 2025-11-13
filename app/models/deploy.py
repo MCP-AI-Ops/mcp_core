@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
 class DeployRequest(BaseModel):
-    service_id: str
+    github_url: str
     repo_id: Optional[str] = None
     image_tag: Optional[str] = "latest"
     env_config: Dict[str, Any] = {}

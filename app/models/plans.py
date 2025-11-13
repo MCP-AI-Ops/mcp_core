@@ -4,7 +4,7 @@ from typing import Optional
 from .common import MCPContext, PredictionResult
 
 class PlansRequest(BaseModel):
-    service_id: str
+    github_url: str
     metric_name: str = "total_events"
     context: MCPContext
     requirements: Optional[str] = None  # 자연어 요청사항 (프론트엔드에서 전송)

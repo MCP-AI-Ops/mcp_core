@@ -1,3 +1,61 @@
-.env
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
 .venv/
-poetry.lock
+venv/
+env/
+.env
+# Environment variables (민감 정보)
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs / temp
+*.log
+*.tmp
+*.cache/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# Model and data artifacts (keep out of git unless using LFS/releases)
+models/*.h5
+models/*.pkl
+models/*.ckpt
+models/checkpoints/
+
+# Large datasets
+data/*.parquet
+*.csv.zip
+
+# Test files (개발 전용)
+backend_api/test.py
+backend_api/quick_test.py
+backend_api/check_models.py
+backend_api/debug_claude.py
+tests/test_*.py
+tests/*_test.py
+
+# Node (if any)
+node_modules/

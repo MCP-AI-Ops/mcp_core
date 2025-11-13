@@ -17,16 +17,16 @@ from app.models.common import MCPContext
 
 # 일단 단순한 룰 먼저 생성해둠. 실제로는 어떤 케이스 있을지 좀 더 나눠봐야 할듯?
 _RULES = {
-    ("prod", "peak", "web"): "web_peak_v1",
-    ("prod", "normal", "web"): "web_normal_v1",
-    ("prod", "low", "web"): "web_low_v1",
-    ("prod", "weekend", "web"): "web_weekend_v1",
-    ("dev", "peak", "web"): "web_dev_peak_v1",
-    ("dev", "normal", "web"): "web_dev_normal_v1",
-    ("dev", "low", "web"): "web_dev_low_v1",
-    ("dev", "weekend", "web"): "web_dev_weekend_v1",
+    ("prod", "peak", "web"): "web_peak_lstm_v1",
+    ("prod", "normal", "web"): "web_normal_lstm_v1",
+    ("prod", "low", "web"): "web_low_lstm_v1",
+    ("prod", "weekend", "web"): "web_weekend_lstm_v1",
+    ("dev", "peak", "web"): "web_dev_baseline_v1",
+    ("dev", "normal", "web"): "web_dev_baseline_v1",
+    ("dev", "low", "web"): "web_dev_baseline_v1",
+    ("dev", "weekend", "web"): "web_dev_baseline_v1",
 }
-_DEFAULT_MODEL = "default_fallback_v1"
+_DEFAULT_MODEL = "baseline_fallback_v1"
 
 def select_route(context: MCPContext) -> Tuple[str, str]:
     """
@@ -57,5 +57,19 @@ def select_route(context: MCPContext) -> Tuple[str, str]:
 
     key = (context.runtime_env, context.time_slot, context.service_type)
     model_version = _RULES.get(key, _DEFAULT_MODEL)
+
+    # 동적 LSTM 선택 규칙 (MVP):
+    # - 프로덕션에서 피크/노멀 시간대이고, 예상 유저 수가 충분히 큰 경우 LSTM 사용
+    try:
+        if (
+            context.runtime_env == "prod"
+            and context.time_slot in ("peak", "normal")
+            and (context.expected_users or 0) >= 1000
+        ):
+            model_version = f"{context.service_type}_{context.time_slot}_lstm_v1"
+    except Exception:
+        # 컨텍스트 필드가 비어있어도 기본 룰로 동작
+        pass
+
     path = "forecast_24h"
     return model_version, path

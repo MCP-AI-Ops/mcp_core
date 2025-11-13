@@ -11,38 +11,32 @@ Context extractor module.
 """
 
 from datetime import datetime
-from app.core.errors import ContextVaidationError
+from app.core.errors import ContextValidationError
 from app.models.common import MCPContext
 
 
 def extract_context(raw_context: dict) -> MCPContext:
-    """
-    요청 본문에서 전달된 컨텍스트 딕셔너리를 Pydantic 모델로 변환.
-    프론트엔드에서 최소한의 정보(github_url, expected_users)만 보내도
-    나머지 필드를 자동으로 채운다.
+    """요청 본문에서 전달된 컨텍스트 딕셔너리를 표준 MCPContext로 변환.
+
+    - 클라이언트 간 필드 명칭 차이를 흡수 (current_users→expected_users, cpu→curr_cpu, memory→curr_mem)
+    - timestamp 기본값 보정 (서버 시각)
+    - github_url 미지정 허용 (None)
     """
     try:
-        # 프론트엔드에서 github_url을 보내면 context_id로 사용
-        # context_id가 없으면 github_url을 context_id로 사용
-        if "github_url" in raw_context and "context_id" not in raw_context:
-            raw_context["context_id"] = raw_context["github_url"]
-        
-        # 필수 필드 기본값 설정
-        if "timestamp" not in raw_context:
-            raw_context["timestamp"] = datetime.utcnow()
-        
-        if "service_type" not in raw_context:
-            raw_context["service_type"] = "web"
-        
-        if "runtime_env" not in raw_context:
-            raw_context["runtime_env"] = "prod"
-        
-        if "time_slot" not in raw_context:
-            raw_context["time_slot"] = "normal"
-        
-        if "weight" not in raw_context:
-            raw_context["weight"] = 1.0
-        
-        return MCPContext(**raw_context)
+        ctx = dict(raw_context or {})
+
+        # 필드 매핑 (하위 호환)
+        if "expected_users" not in ctx and "current_users" in ctx:
+            ctx["expected_users"] = ctx.get("current_users")
+        if "curr_cpu" not in ctx and "cpu" in ctx:
+            ctx["curr_cpu"] = ctx.get("cpu")
+        if "curr_mem" not in ctx and "memory" in ctx:
+            ctx["curr_mem"] = ctx.get("memory")
+
+        # 기본값 채우기
+        ctx.setdefault("timestamp", datetime.utcnow())
+
+        return MCPContext(**ctx)
     except Exception as e:
-        raise ContextVaidationError(f"Invalid context data: {e}")
+        # 통합된 예외 타입으로 래핑
+        raise ContextValidationError(f"Invalid context data: {e}")

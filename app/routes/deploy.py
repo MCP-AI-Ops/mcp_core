@@ -9,7 +9,7 @@ def deploy(req: DeployRequest):
     # 지금은 더미
     return DeployResponse(
         accepted=True,
-        plan_id=f"plan-{req.service_id}",
+        plan_id=f"plan-{req.github_url}",
         instance_id="vm-123456",
         message="Deployment request accepted (mock)"
     )
