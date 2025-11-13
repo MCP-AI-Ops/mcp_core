@@ -49,5 +49,13 @@ models/checkpoints/
 data/*.parquet
 *.csv.zip
 
+# Test files (개발 전용)
+backend_api/test.py
+backend_api/quick_test.py
+backend_api/check_models.py
+backend_api/debug_claude.py
+tests/test_*.py
+tests/*_test.py
+
 # Node (if any)
 node_modules/
