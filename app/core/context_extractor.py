@@ -7,6 +7,7 @@ Context extractor module.
 - 외부에서 들어온 raw context(dict 형태)를 내부 표준 스키마 MCPContext로 변환한다.
 - 필수 필드 검증과 기본값 보정을 한 곳에서 처리한다.
 - 잘못된 입력은 ContextValidationError로 통일해서 올려보낸다.
+- 프론트엔드에서 최소한의 정보만 보내도 나머지 필드를 자동으로 채운다.
 """
 
 from datetime import datetime
