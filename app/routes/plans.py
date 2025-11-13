@@ -20,24 +20,27 @@
 from fastapi import APIRouter
 from datetime import datetime
 import logging
+from typing import Dict
 
 from app.models.plans import PlansRequest, PlansResponse
 from app.core.context_extractor import extract_context
 from app.core.router import select_route
-from app.core.predictor import BaselinePredictor, LSTMPredictor
 from app.core.policy import postprocess_predictions
 from app.core.errors import PredictionError
-
+from app.core.predictor.base import BasePredictor
 from app.core.predictor.baseline_predictor import BaselinePredictor
 from app.core.predictor.lstm_predictor import LSTMPredictor
 from app.core.anomaly import detect_anomaly
 from app.core.alerts.discord_alert import send_discord_alert
 import os
 
-router = APIRouter()
+router = APIRouter(
+    prefix="",
+    tags=["plans"],
+)
 
 # 지연 생성용 레지스트리: 앱 시작 시 무거운 모델/IO를 실행하지 않기 위함
-_PREDICTORS: dict[str, object] = {}
+_PREDICTORS: Dict[str, BasePredictor] = {}
 
 
 def get_predictor(kind: str):
@@ -50,14 +53,12 @@ def get_predictor(kind: str):
     return _PREDICTORS[kind]
 
 
-def pick_engine(model_version: str):
-    # 규칙: 이름에 "lstm" 있으면 lstm 예측기, 아니면 baseline
+def pick_engine(model_version: str) -> BasePredictor:
     """
     model_version 문자열에 'lstm'이 포함된 경우 LSTMPredictor,
     그 외에는 BaselinePredictor를 반환한다.
     """
-    
-    if "lstm" in model_version:
+    if "lstm" in model_version.lower():
         return get_predictor("lstm")
     return get_predictor("baseline")
 
@@ -79,10 +80,13 @@ def make_plan(req: PlansRequest):
       즉, /plans의 요청/응답 스펙은 프런트와 배포 파이프라인이 의존하는 계약(Contract)이므로
       함부로 깨면 안 된다.
     """
-    
+    # 1) context 파싱/검증
     ctx = extract_context(req.context.model_dump())
+    
+    # 2) 라우팅으로 모델 버전 결정
     model_version, path = select_route(ctx)
 
+    # 3) 예측 엔진 선택
     predictor = pick_engine(model_version)
 
     try:
@@ -93,16 +97,56 @@ def make_plan(req: PlansRequest):
         fallback = get_predictor("baseline")
         raw_pred = fallback.run(github_url=req.github_url, metric_name=req.metric_name, ctx=ctx, model_version=model_version)
 
+    # 4) policy 후처리
     final_pred = postprocess_predictions(raw_pred, ctx)
 
-    # (더미) cost 룰
-    max_val = max((p.value for p in final_pred.predictions), default=0)
+    # 5) (더미) cost 룰
+    max_val = max((p.value for p in final_pred.predictions), default=0.0)
     recommended_flavor = "small"
     if max_val > 0.7:
         recommended_flavor = "medium"
     if max_val > 0.9:
         recommended_flavor = "large"
-    expected_cost_per_day = {"small": 1.2, "medium": 2.8, "large": 5.5}[recommended_flavor]
+    expected_cost_per_day = {
+        "small": 1.2,
+        "medium": 2.8,
+        "large": 5.5,
+    }[recommended_flavor]
+
+    # 이상 탐지 및 Discord 알림 (비차단)
+    try:
+        z_thresh = float(os.getenv("ANOMALY_Z_THRESH", "3.0"))
+        anomaly = detect_anomaly(final_pred, ctx, z_thresh=z_thresh)
+        if anomaly.get("anomaly_detected"):
+            webhook = os.getenv("DISCORD_WEBHOOK_URL") or os.getenv("DISCORD_WEBHOOK")
+            username = os.getenv("DISCORD_BOT_NAME", "MCP-dangerous")
+            avatar_url = os.getenv("DISCORD_BOT_AVATAR")
+
+            fields = {
+                "github_url": final_pred.github_url,
+                "metric": final_pred.metric_name,
+                "model_version": final_pred.model_version,
+                "z_score": f"{anomaly.get('score', 0.0):.2f}",
+                "threshold": f"{anomaly.get('threshold', 0.0):.2f}",
+                "max_pred": f"{anomaly.get('max_pred', 0.0):.2f}",
+                "hist_mean": f"{anomaly.get('hist_mean', 0.0):.2f}",
+                "hist_std": f"{anomaly.get('hist_std', 0.0):.2f}",
+                "runtime_env": getattr(ctx, 'runtime_env', None),
+                "time_slot": getattr(ctx, 'time_slot', None),
+                "expected_users": getattr(ctx, 'expected_users', None),
+            }
+
+            send_discord_alert(
+                webhook_url=webhook,
+                title="🚨 MCP Anomaly Detected",
+                description="Z-score threshold exceeded. Please investigate.",
+                fields=fields,
+                username=username,
+                avatar_url=avatar_url,
+            )
+    except Exception as _:
+        # 알림 실패는 비차단. 로그만 남긴다.
+        logging.exception("Discord alert failed (non-blocking)")
 
     # 이상 탐지 및 Discord 알림 (비차단)
     try:

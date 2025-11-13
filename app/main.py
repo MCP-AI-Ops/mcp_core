@@ -5,6 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import plans, status, destroy
 from app.routes import router_auth
+from dotenv import load_dotenv
+load_dotenv()
+from app.routes import router_auth
 
 app = FastAPI(title="MCP Orchestrator", version="0.1.0")
 

@@ -61,3 +61,6 @@ tests/*_test.py
 node_modules/
 
 poetry.lock
+.vscode/
+__pycache__/
+pyrightconfig.json
