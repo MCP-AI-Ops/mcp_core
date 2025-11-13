@@ -17,7 +17,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         password_hash=hash_password(user.password),
         github_repo_url=user.github_repo_url,
-        primary_usage_time=user.primary_usage_time,
+        # primary_usage_time=user.primary_usage_time or "",  # None이면 빈 문자열
         expected_users=user.expected_users
     )
     db.add(new_user)
