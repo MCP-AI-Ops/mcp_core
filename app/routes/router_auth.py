@@ -38,7 +38,7 @@ def update_profile(
     email: str = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """사용자 프로필 정보 업데이트 (GitHub URL, 예상 사용자 수)"""
+    """사용자 프로필 정보 업데이트 (GitHub URL, 요청사항)"""
     user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -46,8 +46,8 @@ def update_profile(
     # 프로젝트 정보 업데이트
     if "github_repo_url" in projectData:
         user.github_repo_url = projectData["github_repo_url"]
-    if "expected_users" in projectData:
-        user.expected_users = projectData["expected_users"]
+    # requirements는 자연어이므로 DB에 저장하지 않고 MCP로만 전송
+    # expected_users는 더 이상 사용하지 않음 (자연어 요청사항으로 대체)
     
     db.commit()
     return {"message": "Profile updated successfully"}
