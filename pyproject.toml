@@ -30,6 +30,12 @@ paramiko = "^3.5.0"
 
 # 기타 사용할 수 있는 것들 (원하면 빼도 됨)
 pydantic = "^2.9.0"
+numpy = "1.26.4"
+pandas = "^2.3.3"
+sqlalchemy = "^2.0.44"
+email-validator = "^2.3.0"
+passlib = "^1.7.4"
+python-jose = {extras = ["cryptography"], version = "^3.5.0"}
 
 # Data science & ML
 numpy = "^1.26.0"

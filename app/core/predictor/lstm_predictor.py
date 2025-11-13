@@ -2,7 +2,7 @@
 LSTM Predictor 모듈
 FastAPI 환경에서 LSTM 기반 24시간 예측을 수행한다.
 """
-
+'''
 from __future__ import annotations
 
 import os
@@ -12,7 +12,13 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-import tensorflow as tf
+
+try:
+    import tensorflow as tf
+    TF_AVAILABLE = True
+except Exception:
+    tf = None
+    TF_AVAILABLE = False
 
 from app.models.common import MCPContext, PredictionResult, PredictionPoint
 from app.core.predictor.base import BasePredictor
@@ -204,4 +210,45 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"\n[오류] 테스트 실행 중 예외: {exc}")
         raise
+'''
+# app/core/predictor/lstm_predictor.py
+
+#from __future__ import annotations
+
+from app.models.common import MCPContext
+from app.core.errors import PredictionError
+
+try:
+    import tensorflow as tf  # type: ignore
+    TF_AVAILABLE = True
+except Exception:
+    tf = None  # type: ignore
+    TF_AVAILABLE = False
+
+
+class LSTMPredictor:
+    """
+    (미래용) LSTM 기반 예측기.
+
+    DevStack VM 같이 TensorFlow가 없는 환경에서는
+    생성 시점에 바로 PredictionError 를 던지게 해서,
+    /plans 에서 baseline 으로 폴백하게 한다.
+    """
+
+    def __init__(self) -> None:
+        if not TF_AVAILABLE:
+            raise PredictionError("TensorFlow is not available in this environment")
+
+        # TODO: 나중에 실제 모델 로딩 구현
+        # self.model = tf.keras.models.load_model("...")  # type: ignore
+        self.model = None
+
+    def run(
+        self,
+        service_id: str,
+        metric_name: str,
+        ctx: MCPContext,
+        model_version: str,
+    ) -> None:
+        raise PredictionError("LSTM predictor is not implemented in this environment")
 
