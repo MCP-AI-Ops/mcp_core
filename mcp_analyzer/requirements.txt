@@ -1,0 +1,3 @@
+mcp
+PyGithub
+requests

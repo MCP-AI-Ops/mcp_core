@@ -11,7 +11,7 @@ class DataSource(ABC):
     @abstractmethod
     def fetch_historical_data(
         self,
-        service_id: str,
+        github_url: str,
         metric_name: str,
         hours: int = 168,
         end_time: Optional[datetime] = None

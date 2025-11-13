@@ -8,6 +8,9 @@ __pycache__/
 .venv/
 venv/
 env/
+.env
+# Environment variables (민감 정보)
+.env
 
 # Jupyter
 .ipynb_checkpoints/
@@ -16,6 +19,7 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Logs / temp
 *.log

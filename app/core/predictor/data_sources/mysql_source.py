@@ -40,7 +40,7 @@ class MySQLDataSource(DataSource):
             url = connection_url
         else:
             host = host or os.getenv("MYSQL_HOST", "localhost")
-            port = port or int(os.getenv("MYSQL_PORT", "3306"))
+            port = port or int(os.getenv("MYSQL_PORT", "3308"))
             user = user or os.getenv("MYSQL_USER", "")
             password = password or os.getenv("MYSQL_PASSWORD", "")
             database = database or os.getenv("MYSQL_DATABASE", "")
@@ -68,7 +68,7 @@ class MySQLDataSource(DataSource):
 
     def fetch_historical_data(
         self,
-        service_id: str,
+        github_url: str,
         metric_name: str,
         hours: int = 168,
         end_time: Optional[datetime] = None,
@@ -83,7 +83,7 @@ class MySQLDataSource(DataSource):
             f"""
             SELECT ts, value
             FROM {self.table}
-            WHERE service_id = :service_id
+            WHERE github_url = :github_url
               AND metric_name = :metric_name
               AND ts BETWEEN :start_ts AND :end_ts
             ORDER BY ts ASC
@@ -95,7 +95,7 @@ class MySQLDataSource(DataSource):
                 result = conn.execute(
                     stmt,
                     {
-                        "service_id": service_id,
+                        "github_url": github_url,
                         "metric_name": metric_name,
                         "start_ts": start_ts,
                         "end_ts": end_ts,
@@ -106,7 +106,7 @@ class MySQLDataSource(DataSource):
             raise DataSourceError(f"MySQL 조회 실패: {exc}")
 
         if not rows:
-            raise DataNotFoundError(f"{service_id}/{metric_name} 데이터 없음")
+            raise DataNotFoundError(f"{github_url}/{metric_name} 데이터 없음")
 
         values = np.array([float(row["value"]) for row in rows], dtype=float)
 

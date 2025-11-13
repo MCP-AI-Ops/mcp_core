@@ -1,189 +1,128 @@
 # MCP Core Orchestrator
 
-FastAPI 기반 MCP Core는 사용자가 업로드한 GitHub 레포지토리의 실행 정보를 분석해 `/plans` 응답으로 서비스별 CPU·Memory 사용량을 예측해 전달한다. 컨텍스트 구조화 → 서비스 라우팅 → 예측 엔진(LSTM/Baseline) 실행 → 정책 후처리 → 이상 알림 순으로 파이프라인이 구성된다.
+GitHub 리포지토리 URL만 입력하면 자동으로 컨텍스트를 수집하고 `/plans` API를 호출해 향후 24시간의 리소스 사용량을 예측·추천하는 MCP Core 백엔드입니다.  
+Frontend · CI/CD는 별도 팀이 담당하며, 이 레포는 Claude MCP와 모델/데이터 계층을 포함한 백엔드에 집중합니다.
 
 ---
 
-## 1. 전체 처리 흐름
-1. 클라이언트가 `/plans` 엔드포인트로 예측 요청을 전송한다.  
-2. `context_extractor`가 `context` JSON을 `MCPContext` 모델로 검증한다.  
-3. `router`가 서비스 타입·런타임 환경을 기준으로 모델 버전을 선택한다.  
-4. `predictor`가 선택된 엔진(LSTM 또는 Baseline)으로 24시간 시계열을 생성한다.  
-5. `policy`가 가중치·클램프·이상 탐지·Discord 알림을 적용한다.  
-6. `/plans` 응답으로 예측 결과, 권장 플래이버, 예상 비용을 반환한다.  
-
-> `/plans` 응답 스키마는 배포 파이프라인과의 계약으로 간주되므로 임의 변경을 지양한다.
+## 전체 흐름
+1. **Frontend** 또는 **Claude MCP**가 GitHub URL을 받아 `/api/analyze`(Backend API)를 호출합니다.  
+2. Backend API는 GitHub 메타데이터를 수집하고 `MCPContext`를 조립한 뒤 MCP Core `/plans`로 전달합니다.  
+3. MCP Core는 `context_extractor → router → predictor → policy → anomaly` 순으로 예측을 수행합니다.  
+4. `/plans` 응답에는 24시간 예측 결과, 권장 인스턴스(flavor), 예상 비용, 이상 징후 여부가 포함됩니다.  
+5. 이상 감지 시 Discord Webhook으로 알림이 전송되고, 선택적으로 MySQL에 이력(요청/예측/알림)을 기록합니다.
 
 ---
 
-## 2. 데이터 파이프라인 및 메타데이터
-- 원본 CSV: `data/lstm_ready_cluster_data.csv` (1,439행 × 84컬럼)  
-- 모델: `models/best_mcp_lstm_model.h5`  
-- 메타데이터: `models/mcp_model_metadata.pkl`  
-  * `sequence_length = 24` (24시간 윈도우)  
-  * `feature_names` 82개, `scaler`, `target_scaler`, `use_log_transform` 플래그 포함  
-- lookback 길이를 변경할 경우 노트북/스크립트에서 재학습하여 모델·메타데이터·CSV를 동시에 업데이트해야 한다.
+## 구성 요소 & 스택
+| 영역 | 기술 | 설명 |
+|------|------|------|
+| Interface | **FastAPI** (`backend_api`, `app.main`) | `/api/analyze`, `/plans` 등 HTTP 엔드포인트 |
+| GitHub 분석 | **PyGithub**, 커스텀 Heuristic | service_type, expected_users, cpu/memory 추정 |
+| 예측기 | **TensorFlow(LSTM)**, **Baseline(Numpy)** | 24시간 시계열 예측, Baseline 자동 페일백 |
+| 데이터 소스 | CSV / MySQL (SQLAlchemy + PyMySQL) | 최근 24h/168h 히스토리 조회, factory로 전환 |
+| 정책 & 이상 감지 | `app/core/policy.py`, `app/core/anomaly.py` | Metric 메타데이터 기반 clamp, z-score alert |
+| 알림 | Discord Webhook | `app/core/alerts/discord_alert.py` |
+| 배포 | Docker Compose (app/backend/mysql) | `docker-compose.yml` |
 
----
-
-## 3. 데이터 전처리 규칙
-### 3.1 결측치 처리 대응
-- **Feature 컬럼**: forward-fill 후 남은 값은 0으로 채운다.  
-- **Target 컬럼**: 음수 값은 0으로 클리핑하고, 로그 변환(`log1p`) 적용 시 결측 처리 규칙을 동일하게 따른다.
-
-### 3.2 이상치 처리 규칙
-- 학습 스크립트(`train_from_notebook.py`)에서 **IQR 기반 Winsorize** 적용:  
-  * 1사분위(Q1)와 3사분위(Q3)를 이용해 IQR을 계산  
-  * 하한 = Q1 - 3×IQR, 상한 = Q3 + 3×IQR  
-  * 범위를 벗어난 값은 하한/상한으로 클램프  
-- 서빙 단계에서는 `policy`에서 예측값을 0~1 사이로 clamp(정규화된 지표 기준)하고, 이상 탐지는 Z-score 기반으로 수행한다.
-
-### 3.3 평균 보간 및 Winsorize
-- 일부 보조 지표(예: 평균 CPU)에서 짧은 구간이 비어 있을 경우 forward-fill과 0 보간을 조합한다.  
-- 극단값 처리를 위해 상·하한을 이동 평균 기반으로 다듬는 경우 추가 Winsorize(5%/95%)를 선택적으로 적용한다. 이는 노트북 실험 시 파라미터로 조정 가능하다.
-
----
-
-## 4. 디렉터리 구조 (요약)
+주요 디렉터리 구조:
 ```
 app/
-  core/
-    context_extractor.py   # 컨텍스트 → MCPContext 변환
-    router.py              # 서비스 라우팅
-    policy.py              # 가중치/클램프/이상 탐지/Discord 알림
-    predictor/
-      base.py              # Predictor 추상 클래스
-      baseline_predictor.py# 통계 기반 + 폴백
-      lstm_predictor.py    # LSTM 예측 엔진
-      data_sources/
-        base.py            # 데이터 소스 추상화
-        csv_source.py      # CSV 데이터 소스
-        mysql_source.py    # SQLAlchemy 기반 MySQL 데이터 소스
-        factory.py         # 환경 변수로 데이터 소스 선택
-  routes/plans.py          # /plans 라우터
-models/                    # 학습된 모델 및 메타데이터
-data/                      # 예측 입력 CSV
-docs/operations_update.md  # 작업 이력 및 운영 가이드
+  core/        # context, router, policy, predictor, anomaly, alerts
+  routes/      # /plans FastAPI 라우터
+  models/      # Pydantic 스키마
+backend_api/   # GitHub 분석 + MCP Core 프락시 (Claude/Frontend 연동)
+docs/          # 아키텍처/배포/API 문서
+models/        # 학습된 LSTM 아티팩트(.h5/.pkl) - Git 미포함
 ```
 
 ---
 
-## 5. 데이터 소스 전환
-### CSV (기본값)
+## `/plans` 계약 요약
+```json
+{
+  "github_url": "github-owner/repo",
+  "metric_name": "total_events",
+  "context": {
+    "github_url": "...",
+    "timestamp": "...",
+    "service_type": "web|api|db",
+    "runtime_env": "prod|dev",
+    "time_slot": "peak|normal|low|weekend",
+    "weight": 1.0,
+    "expected_users": 1200,
+    "curr_cpu": 4,
+    "curr_mem": 8192
+  }
+}
 ```
-DATA_SOURCE_BACKEND=csv
-CSV_DATA_PATH=data/lstm_ready_cluster_data.csv
-```
+- `context_extractor`는 필수 필드를 검증하고 기본값을 보강합니다.
+- `router`는 `runtime_env/time_slot/service_type` 조합으로 모델 버전을 선택하며, prod/peak web 트래픽은 LSTM으로 라우팅됩니다.
+- `policy`는 `app/core/metrics.py`의 메타데이터를 사용해 ratio/count 메트릭을 서로 다른 방식으로 정규화합니다.
 
-### MySQL (SQLAlchemy + PyMySQL)
-```
-DATA_SOURCE_BACKEND=mysql
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=mcp_user
-MYSQL_PASSWORD=secret
-MYSQL_DATABASE=mcp_core
-MYSQL_TABLE=metric_history
-# MYSQL_SSL_CA=/path/to/ca.pem
-```
-- `mysql+pymysql://` 스킴을 사용하며 `PyMySQL`, `SQLAlchemy` 설치가 필요하다.  
-- `metric_history` 테이블 스키마는 다음과 같다.
-  ```sql
-  CREATE TABLE metric_history (
-      service_id   VARCHAR(128),
-      metric_name  VARCHAR(128),
-      ts           DATETIME,
-      value        DOUBLE,
-      PRIMARY KEY (service_id, metric_name, ts)
-  );
-  ```
-- 조회 결과가 부족하면 가장 오래된 값을 복제해 길이를 맞춘다.
+응답(`PlansResponse`) 주요 필드:
+- `prediction.predictions`: 24개 `time/value` 포인트
+- `recommended_flavor`: small · medium · large
+- `expected_cost_per_day`: 소규모 1.2 / 중간 2.8 / 대형 5.5 USD
+- `notes`: 예측 피크와 정규화 값
 
 ---
 
-## 6. 예측 엔진
-| 엔진 | 위치 | 특징 |
-|------|------|------|
-| `LSTMPredictor` | `app/core/predictor/lstm_predictor.py` | TensorFlow 모델 로드, 메타데이터 기반 스케일링 |
-| `BaselinePredictor` | `app/core/predictor/baseline_predictor.py` | 최근 24시간 통계 + 폴백 시나리오 |
+## 빠른 시작
+> 전체 배포 및 운영 플로우는 [`docs/deployment_guide.md`](docs/deployment_guide.md)를 참고하세요.
 
-`policy` 단계에서 두 엔진 모두 컨텍스트 가중치 및 이상 탐지 처리를 거친 뒤 `/plans` 응답으로 전달된다.
+1. **모델 파일 확보**  
+   `models/best_mcp_lstm_model.h5`, `models/mcp_model_metadata.pkl`을 다운로드하여 `models/`에 둡니다. (Git 미포함)
 
----
-
-## 7. 이상 탐지 및 알림
-- `app/core/anomaly.py`: 최근 168시간을 기준으로 z-score를 계산해 이상 여부를 판단한다.  
-- `policy`가 이상을 감지하면 비동기 스레드로 Discord 알림을 전송한다.  
-- 환경 변수:  
-  * `DISCORD_WEBHOOK_URL` (필수)  
-  * `DISCORD_BOT_NAME` (기본값 `MCP-dangerous`)  
-  * `DISCORD_BOT_AVATAR` (기본값 `https://i.imgur.com/9kY5F5k.png`)  
-- 스크립트 테스트 시 비동기 스레드가 완료될 수 있도록 `time.sleep()` 등으로 약간의 대기 시간을 준다.
-
----
-
-## 8. 환경 변수 예시 (.env)
-```bash
-# 데이터 소스
-DATA_SOURCE_BACKEND=csv
-CSV_DATA_PATH=data/lstm_ready_cluster_data.csv
-# MYSQL_HOST=...
-# MYSQL_USER=...
-# MYSQL_PASSWORD=...
-# MYSQL_DATABASE=...
-# MYSQL_TABLE=metric_history
-
-# 모델 및 알림 설정
-DISCORD_WEBHOOK_URL=...
-DISCORD_BOT_NAME=MCP-dangerous
-DISCORD_BOT_AVATAR=https://i.imgur.com/9kY5F5k.png
-ANOMALY_Z=3.0
-```
-
----
-
-## 9. 모델 학습 스크립트 (`train_from_notebook.py`)
-- 노트북을 스크립트화하며 다음을 반영했다.
-  1. 스케일러를 train 데이터로만 학습시켜 데이터 누수를 방지.  
-  2. 결측치는 forward-fill 후 0으로 채워 미래 데이터를 사용하지 않음.  
-  3. 체크포인트와 모델, 메타데이터를 모두 `models/`에 저장.  
-  4. CLI 인자를 통해 CSV 경로, 시퀀스 길이, 학습 epoch 등을 조정.  
-- 실행 예시
-  ```bash
-  python app/core/predictor/train_from_notebook.py \
-    --csv-path data/lstm_ready_cluster_data.csv \
-    --sequence-length 24 \
-    --epochs 80 \
-    --batch-size 32
-  ```
-- 학습 후 `models/best_mcp_lstm_model.h5`와 `models/mcp_model_metadata.pkl`이 갱신되어 서빙과 바로 호환된다.
-
----
-
-## 10. 테스트 및 검증
-1. **Discord 연동 확인**  
+2. **환경 설정**
    ```bash
-   export PYTHONPATH=$PWD
-   export DISCORD_WEBHOOK_URL=...
-   python tests/discord_test.py
+   cp .env.example .env
+   # 필요한 값 수정: DATA_SOURCE_BACKEND, DATABASE_URL, DISCORD_WEBHOOK_URL, GITHUB_TOKEN 등
    ```
-2. **이상 탐지 시뮬레이션**  
-   - 예측 범위를 인위적으로 높여 `postprocess_predictions` 호출 시 알림이 도착하는지 확인.  
-3. **데이터 소스 점검**  
-   - CSV: 파일 경로와 권한 확인.  
-   - MySQL: `MySQLDataSource.is_available()` 호출 또는 CLI로 접속 테스트.
+
+3. **의존성 (선택)**  
+   로컬에서 실행하려면 `pip install -r requirements.txt` 후 `uvicorn app.main:app --reload`.
+
+4. **Docker Compose 배포**
+   ```bash
+   docker-compose up -d --build
+   docker-compose ps
+   ```
+
+5. **헬스 체크 & 샘플 요청**
+   ```bash
+   curl http://localhost:8000/health
+   curl -X POST http://localhost:8001/api/analyze \
+     -H "Content-Type: application/json" \
+     -d '{"github_url": "https://github.com/fastapi/fastapi"}'
+   ```
 
 ---
 
-## 11. 향후 개선 제안
-1. `tests/anomaly_check.py`에 알림 전송 완료까지 대기하는 로직 추가.  
-2. Discord 응답 로그를 중앙 모니터링 시스템(CloudWatch, Prometheus 등)과 연동.  
-3. lookback을 168시간으로 확장할 필요가 생기면 노트북에서 재학습 후 산출물 일괄 갱신.
+## 테스트 & 검증
+- `tests/smoke_check.py`: 데이터 소스/모델 존재 여부, Baseline 예측 가능 여부 확인
+- `tests/test_anomaly_discord.py`: /plans 호출 + Discord 경보 시나리오
+- `validate_mvp.sh` / `validate_mvp.ps1`: 배포 전 필수 의존성, 포트, 모델 파일 체크
 
 ---
 
-## 12. 참고 문서
-- `docs/operations_update.md`  
-- `demoMCPproject.ipynb`
+## 문서 모음
+| 문서 | 설명 |
+|------|------|
+| [`docs/architecture.md`](docs/architecture.md) | End-to-End 구조, 라우팅·정책·Persistence 개요 |
+| [`docs/deployment_guide.md`](docs/deployment_guide.md) | 환경 준비, Docker 배포, 체크리스트, 트러블슈팅 |
+| [`docs/api_guide.md`](docs/api_guide.md) | Health, `/api/analyze`, `/plans` 호출 예시 |
+| [`docs/README_KR.md`](docs/README_KR.md) | 한국어 요약 및 계약 설명 |
+| [`models/README.md`](models/README.md) | LSTM 모델 아티팩트 관리 방법 |
 
 ---
+
+## 기여 & 이슈
+- **이슈 등록**: GitHub Issues
+- **버그 리포트 시** `/plans` 요청/응답 JSON, 로그(`docker-compose logs app/backend`)를 첨부해 주세요.
+- 코드 리뷰를 위해 주요 로직(메트릭 메타, 정책, 배포 문서)이 간결하게 정리되어 있습니다.  
+  새로운 문서를 추가할 때는 `docs/` 하위에 위치시키고 README에서 링크를 갱신해 주세요.
+
+---
+
+저작권: MIT · Maintainer: MCP AI Ops Team

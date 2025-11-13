@@ -16,14 +16,14 @@ class BasePredictor(ABC):
     Base class for all predictors.
 
     모든 Predictor 구현체는 run()을 제공해야 한다.
-    run()은 service_id/metric_name/ctx/model_version을 받아서
+    run()은 github_url/metric_name/ctx/model_version을 받아서
     PredictionResult를 반환해야 한다.
     """
 
     @abstractmethod
-    def run(self, *, service_id: str, metric_name: str, context: MCPContext, model_version: str) -> PredictionResult:
+    def run(self, *, github_url: str, metric_name: str, context: MCPContext, model_version: str) -> PredictionResult:
         """
-        Execute prediction for the given (service_id, metric_name) under context ctx.
+        Execute prediction for the given (github_url, metric_name) under context ctx.
 
         Returns
         -------

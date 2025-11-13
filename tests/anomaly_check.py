@@ -12,14 +12,14 @@ from app.models.common import MCPContext
 
 bp = BaselinePredictor()
 ctx = MCPContext(
-    context_id='anomaly-1',
+    github_url='anomaly-1',
     timestamp=datetime.utcnow(),
     service_type='web',
     runtime_env='prod',
     time_slot='peak',
     weight=1.0
 )
-pr = bp.run(service_id='svc-anom', metric_name='total_events', ctx=ctx, model_version='baseline_v1')
+pr = bp.run(github_url='svc-anom', metric_name='total_events', ctx=ctx, model_version='baseline_v1')
 print('Baseline 결과 수:', len(pr.predictions))
 
 res = postprocess_predictions(pr, ctx)

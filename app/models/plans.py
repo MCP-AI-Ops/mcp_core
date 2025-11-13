@@ -4,7 +4,7 @@ from typing import Optional
 from .common import MCPContext, PredictionResult
 
 class PlansRequest(BaseModel):
-    service_id: str
+    github_url: str
     metric_name: str = "total_events"
     context: MCPContext
 

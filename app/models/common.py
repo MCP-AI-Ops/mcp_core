@@ -25,7 +25,7 @@ class PredictionPoint(BaseModel):
     value: float
 
 class PredictionResult(BaseModel):
-    service_id: str
+    github_url: str
     metric_name: str
     model_version: str
     generated_at: datetime

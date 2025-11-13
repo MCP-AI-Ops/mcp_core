@@ -27,7 +27,7 @@ class CSVDataSource(DataSource):
 
     def fetch_historical_data(
         self,
-        service_id: str,
+        github_url: str,
         metric_name: str,
         hours: int = 168,
         end_time: Optional[datetime] = None,
@@ -36,12 +36,20 @@ class CSVDataSource(DataSource):
         if self.df is None:
             raise DataSourceError("CSV 데이터가 로드되지 않음")
 
-        if metric_name not in self.df.columns:
+        df = self.df
+
+        # 서비스별 데이터 분리 지원: github_url 컬럼 존재 시 필터링
+        if "github_url" in df.columns:
+            filtered = df[df["github_url"] == github_url]
+            if not filtered.empty:
+                df = filtered
+
+        if metric_name not in df.columns:
             raise DataNotFoundError(f"{metric_name} 컬럼이 CSV에 존재하지 않음")
 
-        end_idx = len(self.df) - 1
+        end_idx = len(df) - 1
         start_idx = max(0, end_idx - hours + 1)
-        data = self.df.iloc[start_idx : end_idx + 1][metric_name].values
+        data = df.iloc[start_idx : end_idx + 1][metric_name].values
 
         if len(data) < hours:
             pad_len = hours - len(data)

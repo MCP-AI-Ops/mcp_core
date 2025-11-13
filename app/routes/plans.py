@@ -4,7 +4,7 @@
 /plans 라우트.
 
 역할:
-- 클라이언트가 특정 서비스(service_id)에 대해 특정 metric(metric_name)의
+- 클라이언트가 특정 서비스(github_url)에 대해 특정 metric(metric_name)의
   향후 리소스 사용량 예측을 요청하면,
   1) context 파싱/검증
   2) router 기반 모델 버전 선택
@@ -83,12 +83,12 @@ def make_plan(req: PlansRequest):
     predictor = pick_engine(model_version)
 
     try:
-        raw_pred = predictor.run(service_id=req.service_id, metric_name=req.metric_name, ctx=ctx, model_version=model_version)
+        raw_pred = predictor.run(github_url=req.github_url, metric_name=req.metric_name, ctx=ctx, model_version=model_version)
     except PredictionError as e:
         # LSTM 등 예측 실패 시 안전하게 baseline으로 폴백
         logging.exception("Predictor failed, falling back to baseline: %s", e)
         fallback = get_predictor("baseline")
-        raw_pred = fallback.run(service_id=req.service_id, metric_name=req.metric_name, ctx=ctx, model_version=model_version)
+        raw_pred = fallback.run(github_url=req.github_url, metric_name=req.metric_name, ctx=ctx, model_version=model_version)
 
     final_pred = postprocess_predictions(raw_pred, ctx)
 
