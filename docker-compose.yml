@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # MySQL 데이터베이스
+  mysql:
+    image: mysql:8.0
+    container_name: mcp_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: mcp_root_pass
+      MYSQL_DATABASE: mcp_autoscaler
+      MYSQL_USER: mcp_user
+      MYSQL_PASSWORD: mcp_secret
+    ports:
+      - "3308:3308"
+    volumes:
+      - ./db/schema_mvp.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - mcp_mysql_data:/var/lib/mysql
+    networks:
+      - mcp_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pmcp_root_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI 애플리케이션 (MVP Core)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: mysql+pymysql://mcp_user:mcp_secret@mysql:3308/mcp_autoscaler
+      DATA_SOURCE_BACKEND: csv
+      CSV_DATA_PATH: /app/data/lstm_ready_cluster_data.csv
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
+      DISCORD_BOT_NAME: MCP-dangerous
+      ANOMALY_Z: "3.0"
+    volumes:
+      - .:/app
+      - ./models:/app/models
+      - ./data:/app/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - mcp_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Backend API (프론트엔드 → 백엔드 → MCP Core)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp_backend
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      MCP_CORE_URL: http://app:8000
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      BACKEND_PORT: "8001"
+    volumes:
+      - .:/app
+    depends_on:
+      - app
+    networks:
+      - mcp_network
+    command: python -m uvicorn backend_api.main:app --host 0.0.0.0 --port 8001 --reload
+
+volumes:
+  mcp_mysql_data:
+    driver: local
+
+networks:
+  mcp_network:
+    driver: bridge

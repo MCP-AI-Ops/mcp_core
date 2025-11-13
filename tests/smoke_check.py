@@ -20,7 +20,7 @@ try:
         print('데이터 소스에 CSV가 로드되지 않음')
     else:
         print('CSV 로드 행 수:', len(ds.df))
-        vals = ds.fetch_historical_data(service_id='test', metric_name='total_events', hours=24)
+        vals = ds.fetch_historical_data(github_url='test', metric_name='total_events', hours=24)
         print('조회 데이터 형태:', getattr(vals, 'shape', None))
         print('샘플 값:', vals[:3])
 except Exception as e:
@@ -32,14 +32,14 @@ try:
     from app.models.common import MCPContext
     bp = BaselinePredictor()
     ctx = MCPContext(
-        context_id='smoke-1',
+        github_url='smoke-1',
         timestamp=datetime.utcnow(),
         service_type='web',
         runtime_env='prod',
         time_slot='normal',
         weight=1.0
     )
-    pr = bp.run(service_id='svc-smoke', metric_name='total_events', ctx=ctx, model_version='baseline_v1')
+    pr = bp.run(github_url='svc-smoke', metric_name='total_events', ctx=ctx, model_version='baseline_v1')
     print('Baseline 예측 개수:', len(pr.predictions))
     print('첫 예측 값:', pr.predictions[0].value)
 except Exception as e:

@@ -27,7 +27,7 @@ class BaselinePredictor(BasePredictor):
     def run(
         self,
         *,
-        service_id: str,
+        github_url: str,
         metric_name: str,
         ctx: MCPContext,
         model_version: str,
@@ -35,21 +35,21 @@ class BaselinePredictor(BasePredictor):
         try:
             if self.data_source is not None:
                 recent = self.data_source.fetch_historical_data(
-                    service_id=service_id,
+                    github_url=github_url,
                     metric_name=metric_name,
                     hours=24,
                 )
                 return self._statistical_prediction(
-                    service_id, metric_name, ctx, model_version, recent
+                    github_url, metric_name, ctx, model_version, recent
                 )
         except (DataNotFoundError, Exception) as exc:
             print(f"[경고] 데이터 수집 실패: {exc}, 폴백 경로 사용")
 
-        return self._fallback_prediction(service_id, metric_name, ctx, model_version)
+        return self._fallback_prediction(github_url, metric_name, ctx, model_version)
 
     def _statistical_prediction(
         self,
-        service_id: str,
+        github_url: str,
         metric_name: str,
         ctx: MCPContext,
         model_version: str,
@@ -87,7 +87,7 @@ class BaselinePredictor(BasePredictor):
             )
 
         return PredictionResult(
-            service_id=service_id,
+            github_url=github_url,
             metric_name=metric_name,
             model_version=f"{model_version}_statistical",
             generated_at=datetime.utcnow(),
@@ -96,7 +96,7 @@ class BaselinePredictor(BasePredictor):
 
     def _fallback_prediction(
         self,
-        service_id: str,
+        github_url: str,
         metric_name: str,
         ctx: MCPContext,
         model_version: str,
@@ -132,7 +132,7 @@ class BaselinePredictor(BasePredictor):
             )
 
         return PredictionResult(
-            service_id=service_id,
+            github_url=github_url,
             metric_name=metric_name,
             model_version=f"{model_version}_fallback",
             generated_at=datetime.utcnow(),

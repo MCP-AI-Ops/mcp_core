@@ -13,6 +13,7 @@ import numpy as np
 from app.models.common import PredictionResult, MCPContext
 from app.core.predictor.data_sources.factory import get_data_source
 from app.core.errors import DataSourceError
+from app.core.metrics import get_metric_meta
 
 
 def detect_anomaly(
@@ -29,7 +30,7 @@ def detect_anomaly(
 
     try:
         hist = ds.fetch_historical_data(
-            service_id=pred.service_id,
+            github_url=pred.github_url,
             metric_name=pred.metric_name,
             hours=hours,
         )
@@ -43,9 +44,20 @@ def detect_anomaly(
     if len(hist) == 0:
         return {"anomaly_detected": False, "score": 0.0, "reason": "과거 데이터 없음"}
 
+    meta = get_metric_meta(pred.metric_name)
+    if meta.kind == "ratio":
+        hi = meta.clamp_max if meta.clamp_max is not None else 1.0
+        hist = np.clip(hist, meta.clamp_min, hi)
+    else:
+        hist = np.maximum(hist, meta.clamp_min)
+
     hist_mean = float(np.mean(hist))
     hist_std = float(np.std(hist))
     max_pred = float(max((p.value for p in pred.predictions), default=0.0))
+    if meta.kind == "ratio":
+        max_pred = meta.clamp(max_pred)
+    elif max_pred < meta.clamp_min:
+        max_pred = meta.clamp_min
 
     if math.isclose(hist_std, 0.0):
         score = (max_pred / hist_mean) if hist_mean > 0 else float("inf")
@@ -65,4 +77,3 @@ def detect_anomaly(
         "hist_std": hist_std,
         "threshold": z_thresh,
     }
-

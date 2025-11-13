@@ -30,13 +30,14 @@ class LSTMPredictor(BasePredictor):
 
     def __init__(
         self,
-        model_path: str = "models/best_mcp_lstm_model.h5",
-        metadata_path: str = "models/mcp_model_metadata.pkl",
-        csv_path: str = "data/lstm_ready_cluster_data.csv",
+        model_path: str | None = None,
+        metadata_path: str | None = None,
+        csv_path: str | None = None,
     ):
-        self.model_path = model_path
-        self.metadata_path = metadata_path
-        self.csv_path = csv_path
+        # 경로 우선순위: 명시 인자 > 환경변수 > 기본값
+        self.model_path = model_path or os.getenv("LSTM_MODEL_PATH", "models/best_mcp_lstm_model.h5")
+        self.metadata_path = metadata_path or os.getenv("LSTM_METADATA_PATH", "models/mcp_model_metadata.pkl")
+        self.csv_path = csv_path or os.getenv("LSTM_CSV_PATH", "data/lstm_ready_cluster_data.csv")
 
         self.model = None
         self.metadata = None
@@ -59,7 +60,10 @@ class LSTMPredictor(BasePredictor):
     # ------------------------------------------------------------------
     def _load_model(self) -> None:
         if not os.path.exists(self.model_path):
-            raise PredictionError(f"모델 파일이 존재하지 않음: {self.model_path}")
+            raise PredictionError(
+                "LSTM 모델 파일을 찾을 수 없습니다. LSTM_MODEL_PATH 환경변수로 경로를 지정하거나,"
+                f" 컨테이너/호스트에 '{self.model_path}'를 배치하세요."
+            )
 
         try:
             self.model = tf.keras.models.load_model(self.model_path)
@@ -69,7 +73,10 @@ class LSTMPredictor(BasePredictor):
 
     def _load_metadata(self) -> None:
         if not os.path.exists(self.metadata_path):
-            raise PredictionError(f"메타데이터 파일이 존재하지 않음: {self.metadata_path}")
+            raise PredictionError(
+                "LSTM 메타데이터 파일을 찾을 수 없습니다. LSTM_METADATA_PATH 환경변수로 경로를 지정하거나,"
+                f" 컨테이너/호스트에 '{self.metadata_path}'를 배치하세요."
+            )
 
         try:
             with open(self.metadata_path, "rb") as fh:
@@ -104,7 +111,7 @@ class LSTMPredictor(BasePredictor):
     def run(
         self,
         *,
-        service_id: str,
+        github_url: str,
         metric_name: str,
         ctx: MCPContext,
         model_version: str,
@@ -141,16 +148,14 @@ class LSTMPredictor(BasePredictor):
         ]
 
         return PredictionResult(
-            service_id=service_id,
+            github_url=github_url,
             metric_name=metric_name,
             model_version=model_version,
             generated_at=datetime.utcnow(),
             predictions=prediction_points,
         )
 
-    # ------------------------------------------------------------------
     # 내부 헬퍼
-    # ------------------------------------------------------------------
     def _generate_predictions(self, X: np.ndarray) -> list[float]:
         try:
             results = []
@@ -179,9 +184,7 @@ class LSTMPredictor(BasePredictor):
             raise PredictionError(f"예측 생성 실패: {exc}")
 
 
-# ----------------------------------------------------------------------
 # 테스트 실행용 진입점
-# ----------------------------------------------------------------------
 if __name__ == "__main__":
     print("=" * 60)
     print("LSTM Predictor 테스트 실행")
@@ -191,7 +194,7 @@ if __name__ == "__main__":
         predictor = LSTMPredictor()
         print("\n테스트 예측 수행 중...")
         result = predictor.run(
-            service_id="test",
+            github_url="test",
             metric_name="total_events",
             ctx=None,
             model_version="v1",

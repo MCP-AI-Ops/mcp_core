@@ -27,7 +27,7 @@ class InstanceInfo(BaseModel):
         return self.flavor_name
 
 class DeployRequest(BaseModel):
-    service_id: str
+    github_url: str
     repo_id: Optional[str] = None
     image_tag: Optional[str] = "latest"
     plan_id: Optional[str] = None  # Plans에서 넘어온 plan_id
