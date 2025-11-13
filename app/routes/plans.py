@@ -30,6 +30,9 @@ from app.core.errors import PredictionError
 
 from app.core.predictor.baseline_predictor import BaselinePredictor
 from app.core.predictor.lstm_predictor import LSTMPredictor
+from app.core.anomaly import detect_anomaly
+from app.core.alerts.discord_alert import send_discord_alert
+import os
 
 router = APIRouter()
 
@@ -100,6 +103,41 @@ def make_plan(req: PlansRequest):
     if max_val > 0.9:
         recommended_flavor = "large"
     expected_cost_per_day = {"small": 1.2, "medium": 2.8, "large": 5.5}[recommended_flavor]
+
+    # 이상 탐지 및 Discord 알림 (비차단)
+    try:
+        z_thresh = float(os.getenv("ANOMALY_Z_THRESH", "3.0"))
+        anomaly = detect_anomaly(final_pred, ctx, z_thresh=z_thresh)
+        if anomaly.get("anomaly_detected"):
+            webhook = os.getenv("DISCORD_WEBHOOK_URL") or os.getenv("DISCORD_WEBHOOK")
+            username = os.getenv("DISCORD_BOT_NAME", "MCP-dangerous")
+            avatar_url = os.getenv("DISCORD_BOT_AVATAR")
+
+            fields = {
+                "github_url": final_pred.github_url,
+                "metric": final_pred.metric_name,
+                "model_version": final_pred.model_version,
+                "z_score": f"{anomaly.get('score', 0.0):.2f}",
+                "threshold": f"{anomaly.get('threshold', 0.0):.2f}",
+                "max_pred": f"{anomaly.get('max_pred', 0.0):.2f}",
+                "hist_mean": f"{anomaly.get('hist_mean', 0.0):.2f}",
+                "hist_std": f"{anomaly.get('hist_std', 0.0):.2f}",
+                "runtime_env": getattr(ctx, 'runtime_env', None),
+                "time_slot": getattr(ctx, 'time_slot', None),
+                "expected_users": getattr(ctx, 'expected_users', None),
+            }
+
+            send_discord_alert(
+                webhook_url=webhook,
+                title="🚨 MCP Anomaly Detected",
+                description="Z-score threshold exceeded. Please investigate.",
+                fields=fields,
+                username=username,
+                avatar_url=avatar_url,
+            )
+    except Exception as _:
+        # 알림 실패는 비차단. 로그만 남긴다.
+        logging.exception("Discord alert failed (non-blocking)")
 
     return PlansResponse(
         prediction=final_pred,
