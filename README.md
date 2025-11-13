@@ -124,5 +124,3 @@ models/        # 학습된 LSTM 아티팩트(.h5/.pkl) - Git 미포함
   새로운 문서를 추가할 때는 `docs/` 하위에 위치시키고 README에서 링크를 갱신해 주세요.
 
 ---
-
-저작권: MIT · Maintainer: MCP AI Ops Team
