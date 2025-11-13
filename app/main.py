@@ -2,7 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.routes import plans, deploy, status, destroy
-from app.routes import router_authfrom dotenv import load_dotenv
+from app.routes import router_auth
+from dotenv import load_dotenv
 load_dotenv()
 
 
