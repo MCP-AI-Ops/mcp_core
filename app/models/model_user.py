@@ -22,5 +22,5 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     github_repo_url: HttpUrl
-    primary_usage_time: str
+    # primary_usage_time: str | None = None  # Optional로 변경
     expected_users: int

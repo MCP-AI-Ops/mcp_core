@@ -17,7 +17,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         password_hash=hash_password(user.password),
         github_repo_url=user.github_repo_url,
-        primary_usage_time=user.primary_usage_time,
+        # primary_usage_time=user.primary_usage_time or "",  # None이면 빈 문자열
         expected_users=user.expected_users
     )
     db.add(new_user)
@@ -31,6 +31,26 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_access_token({"sub": db_user.email})
     return {"access_token": token, "token_type": "bearer"}
+
+@router.put("/profile")
+def update_profile(
+    projectData: dict,
+    email: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """사용자 프로필 정보 업데이트 (GitHub URL, 예상 사용자 수)"""
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # 프로젝트 정보 업데이트
+    if "github_repo_url" in projectData:
+        user.github_repo_url = projectData["github_repo_url"]
+    if "expected_users" in projectData:
+        user.expected_users = projectData["expected_users"]
+    
+    db.commit()
+    return {"message": "Profile updated successfully"}
 
 @router.delete("/delete")
 def delete_account(email: str = Depends(get_current_user), db: Session = Depends(get_db)):
