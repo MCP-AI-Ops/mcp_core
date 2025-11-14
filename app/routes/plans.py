@@ -173,7 +173,7 @@ def make_plan(req: PlansRequest):
 
             send_discord_alert(
                 webhook_url=webhook,
-                title="🚨 MCP Anomaly Detected",
+                title="MCP Anomaly Detected",
                 description="Z-score threshold exceeded. Please investigate.",
                 fields=fields,
                 username=username,

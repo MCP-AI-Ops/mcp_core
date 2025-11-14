@@ -163,28 +163,28 @@ Return JSON only."""
             
             # 응답에서 JSON 추출
             result = response.json()
-            logger.info(f"✅ Claude API response: {json.dumps(result, ensure_ascii=False)}")
+            logger.info(f"Claude API response: {json.dumps(result, ensure_ascii=False)}")
             
             # Claude API v2023-06-01 응답 구조: {"content": [{"type": "text", "text": "..."}], ...}
             if "content" not in result:
-                logger.error(f"❌ No 'content' in response: {result}")
+                logger.error(f"No 'content' in response: {result}")
                 raise KeyError("content")
             
             content_blocks = result["content"]
             if not content_blocks or len(content_blocks) == 0:
-                logger.error(f"❌ Empty content blocks: {content_blocks}")
+                logger.error(f"Empty content blocks: {content_blocks}")
                 raise ValueError("Empty content")
             
             # 첫 번째 텍스트 블록 추출
             text = content_blocks[0]["text"].strip()
-            logger.info(f"📝 Raw Claude text: {text}")
+            logger.info(f"Raw Claude text: {text}")
             
             # JSON 마커 제거
             text = text.replace("```json", "").replace("```", "").strip()
             
             # JSON 파싱
             parsed = json.loads(text)
-            logger.info(f"✅ Parsed context: {json.dumps(parsed, ensure_ascii=False)}")
+            logger.info(f"Parsed context: {json.dumps(parsed, ensure_ascii=False)}")
             return parsed
     
     except KeyError as e:
@@ -472,9 +472,9 @@ if __name__ == "__main__":
     """
     import uvicorn
     port = int(os.getenv("BACKEND_PORT", "8001"))
-    print(f"🚀 Backend API: http://localhost:{port}")
-    print(f"🤖 Claude: {'enabled' if ANTHROPIC_API_KEY else 'disabled'}")
-    print(f"📡 MCP Core: {MCP_CORE_URL}")
-    print(f"🔑 GitHub Token: {'configured' if GITHUB_TOKEN else 'not set'}")
-    print(f"\n💡 Tip: Set ANTHROPIC_API_KEY in .env file")
+    print(f"Backend API: http://localhost:{port}")
+    print(f"Claude: {'enabled' if ANTHROPIC_API_KEY else 'disabled'}")
+    print(f"MCP Core: {MCP_CORE_URL}")
+    print(f"GitHub Token: {'configured' if GITHUB_TOKEN else 'not set'}")
+    print(f"\nTip: Set ANTHROPIC_API_KEY in .env file")
     uvicorn.run(app, host="0.0.0.0", port=port)

@@ -34,7 +34,7 @@ for file in "${MODEL_FILES[@]}"; do
 done
 
 if [ ${#MISSING_MODELS[@]} -gt 0 ]; then
-    echo -e "\n${RED}⚠️  필수 모델 파일이 누락되었습니다!${NC}"
+    echo -e "\n${RED}필수 모델 파일이 누락되었습니다!${NC}"
     echo -e "   ${YELLOW}다음 파일을 준비해주세요:${NC}"
     for file in "${MISSING_MODELS[@]}"; do
         echo "   - $file"
@@ -51,13 +51,13 @@ if [ -f ".env" ]; then
     
     # 중요 변수 확인
     if ! grep -q "DATABASE_URL=" .env; then
-        echo -e "  ${YELLOW}⚠️  DATABASE_URL이 설정되지 않았습니다${NC}"
+        echo -e "  ${YELLOW}DATABASE_URL이 설정되지 않았습니다${NC}"
     fi
     if grep -q "DISCORD_WEBHOOK_URL=$\|DISCORD_WEBHOOK_URL=\s*$" .env; then
-        echo -e "  ${YELLOW}⚠️  DISCORD_WEBHOOK_URL이 비어있습니다 (선택적)${NC}"
+        echo -e "  ${YELLOW}DISCORD_WEBHOOK_URL이 비어있습니다 (선택적)${NC}"
     fi
     if grep -q "GITHUB_TOKEN=$\|GITHUB_TOKEN=\s*$" .env; then
-        echo -e "  ${YELLOW}⚠️  GITHUB_TOKEN이 비어있습니다 (Rate Limit 주의)${NC}"
+        echo -e "  ${YELLOW}GITHUB_TOKEN이 비어있습니다 (Rate Limit 주의)${NC}"
     fi
 else
     echo -e "  ${RED}✗${NC} .env 파일이 없습니다"
@@ -101,7 +101,7 @@ for port in "${PORTS[@]}"; do
 done
 
 if [ ${#USED_PORTS[@]} -gt 0 ]; then
-    echo -e "\n${YELLOW}⚠️  다음 포트가 이미 사용 중입니다:${NC}"
+    echo -e "\n${YELLOW}다음 포트가 이미 사용 중입니다:${NC}"
     for port in "${USED_PORTS[@]}"; do
         echo "   - $port"
     done
@@ -122,7 +122,7 @@ fi
 echo -e "\n${CYAN}=== 검증 완료 ===${NC}"
 
 if [ ${#MISSING_MODELS[@]} -eq 0 ] && [ -f ".env" ]; then
-    echo -e "\n${GREEN}✅ MVP 배포 준비가 완료되었습니다!${NC}"
+    echo -e "\n${GREEN}MVP 배포 준비가 완료되었습니다!${NC}"
     echo ""
     echo -e "${CYAN}다음 명령으로 시작하세요:${NC}"
     echo -e "  ${NC}docker-compose up -d --build${NC}"
@@ -132,7 +132,7 @@ if [ ${#MISSING_MODELS[@]} -eq 0 ] && [ -f ".env" ]; then
     echo -e "  ${NC}curl http://localhost:8000/health${NC}"
     echo ""
 else
-    echo -e "\n${YELLOW}⚠️  일부 문제를 해결 후 다시 시도하세요${NC}"
+    echo -e "\n${YELLOW}일부 문제를 해결 후 다시 시도하세요${NC}"
     echo ""
     exit 1
 fi

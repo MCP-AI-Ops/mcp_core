@@ -219,22 +219,22 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         logger.info("예측 완료")
         
         # 4. 결과 포매팅
-        output = f"""# 🎯 GitHub 저장소 분석 결과
+        output = f"""# GitHub 저장소 분석 결과
 
-## 📦 저장소 정보
+## 저장소 정보
 - **이름**: {repo_data['full_name']}
 - **설명**: {repo_data['description'] or 'N/A'}
 - **언어**: {repo_data['language']}
-- **스타**: ⭐ {repo_data['stars']:,}
-- **포크**: 🍴 {repo_data['forks']:,}
+- **스타**: {repo_data['stars']:,}
+- **포크**: {repo_data['forks']:,}
 
-## 🔍 추론된 컨텍스트
+## 추론된 컨텍스트
 - **서비스 타입**: `{mcp_context['service_type']}`
 - **예상 사용자**: {mcp_context['expected_users']:,}명
 - **CPU**: {mcp_context['curr_cpu']} 코어
 - **메모리**: {mcp_context['curr_mem']:,} MB
 
-## 📈 24시간 예측
+## 24시간 예측
 
 ### 추천 인스턴스
 - **Flavor**: `{result.get('recommended_flavor', 'N/A')}`
@@ -257,23 +257,23 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
     
     except ValueError as e:
         logger.error(f"입력 오류: {e}")
-        return [TextContent(type="text", text=f"❌ 오류: {str(e)}")]
+        return [TextContent(type="text", text=f"오류: {str(e)}")]
     
     except ConnectionError as e:
         logger.error(f"연결 오류: {e}")
-        return [TextContent(type="text", text=f"❌ MCP Core 연결 실패:\n{str(e)}")]
+        return [TextContent(type="text", text=f"MCP Core 연결 실패:\n{str(e)}")]
     
     except Exception as e:
         logger.error(f"예상치 못한 오류: {e}", exc_info=True)
-        return [TextContent(type="text", text=f"❌ 오류:\n{str(e)}")]
+        return [TextContent(type="text", text=f"오류:\n{str(e)}")]
 
 
 async def main():
     """MCP Server 실행"""
     logger.info("=" * 50)
-    logger.info("🚀 GitHub MCP Server 시작")
-    logger.info(f"🔗 MCP Core: {MCP_CORE_URL}")
-    logger.info(f"🔑 GitHub Token: {'설정됨' if GITHUB_TOKEN else '미설정'}")
+    logger.info("GitHub MCP Server 시작")
+    logger.info(f"MCP Core: {MCP_CORE_URL}")
+    logger.info(f"GitHub Token: {'설정됨' if GITHUB_TOKEN else '미설정'}")
     logger.info("=" * 50)
     
     async with stdio_server() as (read_stream, write_stream):
