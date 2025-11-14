@@ -26,7 +26,7 @@ foreach ($file in $modelFiles) {
 }
 
 if ($missingModels.Count -gt 0) {
-    Write-Host "`n⚠️  필수 모델 파일이 누락되었습니다!" -ForegroundColor Red
+    Write-Host "`n필수 모델 파일이 누락되었습니다!" -ForegroundColor Red
     Write-Host "   다음 파일을 준비해주세요:" -ForegroundColor Yellow
     foreach ($file in $missingModels) {
         Write-Host "   - $file"
@@ -56,7 +56,7 @@ if (Test-Path ".env") {
     }
     
     if ($warnings.Count -gt 0) {
-        Write-Host "  ⚠️  다음 환경 변수가 비어있습니다:" -ForegroundColor Yellow
+        Write-Host "  다음 환경 변수가 비어있습니다:" -ForegroundColor Yellow
         foreach ($var in $warnings) {
             Write-Host "     - $var"
         }
@@ -104,7 +104,7 @@ foreach ($port in $ports) {
 }
 
 if ($usedPorts.Count -gt 0) {
-    Write-Host "`n⚠️  다음 포트가 이미 사용 중입니다:" -ForegroundColor Yellow
+    Write-Host "`n다음 포트가 이미 사용 중입니다:" -ForegroundColor Yellow
     foreach ($port in $usedPorts) {
         Write-Host "   - $port"
     }
@@ -125,7 +125,7 @@ if (Test-Path "data/lstm_ready_cluster_data.csv") {
 Write-Host "`n=== 검증 완료 ===" -ForegroundColor Cyan
 
 if ($missingModels.Count -eq 0 -and (Test-Path ".env")) {
-    Write-Host "`n✅ MVP 배포 준비가 완료되었습니다!" -ForegroundColor Green
+    Write-Host "`nMVP 배포 준비가 완료되었습니다!" -ForegroundColor Green
     Write-Host ""
     Write-Host "다음 명령으로 시작하세요:" -ForegroundColor Cyan
     Write-Host "  docker-compose up -d --build" -ForegroundColor White
@@ -135,7 +135,7 @@ if ($missingModels.Count -eq 0 -and (Test-Path ".env")) {
     Write-Host "  curl http://localhost:8000/health" -ForegroundColor White
     Write-Host ""
 } else {
-    Write-Host "`n⚠️  일부 문제를 해결 후 다시 시도하세요" -ForegroundColor Yellow
+    Write-Host "`n일부 문제를 해결 후 다시 시도하세요" -ForegroundColor Yellow
     Write-Host ""
     exit 1
 }

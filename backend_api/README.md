@@ -1,95 +1,95 @@
-# Backend API - 완전 자동화
+﻿# Backend API - ?꾩쟾 ?먮룞??
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
 [![Claude](https://img.shields.io/badge/Claude-3.5%20Sonnet-orange.svg)](https://www.anthropic.com/)
 
-프론트엔드 자연어 입력을 Claude API로 자동 변환하여 MCP Core에 전달하는 완전 자동화 Backend API
+?꾨줎?몄뿏???먯뿰???낅젰??Claude API濡??먮룞 蹂?섑븯??MCP Core???꾨떖?섎뒗 ?꾩쟾 ?먮룞??Backend API
 
-## 📋 목차
+## ?뱥 紐⑹감
 
-- [개요](#개요)
-- [아키텍처](#아키텍처)
-- [설치](#설치)
-- [사용법](#사용법)
-- [API 문서](#api-문서)
-- [예제](#예제)
-- [트러블슈팅](#트러블슈팅)
+- [媛쒖슂](#媛쒖슂)
+- [?꾪궎?띿쿂](#?꾪궎?띿쿂)
+- [?ㅼ튂](#?ㅼ튂)
+- [?ъ슜踰?(#?ъ슜踰?
+- [API 臾몄꽌](#api-臾몄꽌)
+- [?덉젣](#?덉젣)
+- [?몃윭釉붿뒋??(#?몃윭釉붿뒋??
 
-## 개요
+## 媛쒖슂
 
-### 주요 기능
+### 二쇱슂 湲곕뒫
 
-- 🤖 **Claude AI 통합**: 자연어를 CPU/Memory/Users로 자동 변환
-- 🔄 **완전 자동화**: GitHub URL + 자연어 입력만으로 예측 수행
-- 📊 **LSTM 예측**: MCP Core와 연동하여 리소스 예측
-- 🚨 **이상 탐지**: 자동 이상 탐지 및 Discord 알림
-- 🌐 **CORS 지원**: 모든 오리진에서 접근 가능
+- ?쨼 **Claude AI ?듯빀**: ?먯뿰?대? CPU/Memory/Users濡??먮룞 蹂??
+- ?봽 **?꾩쟾 ?먮룞??*: GitHub URL + ?먯뿰???낅젰留뚯쑝濡??덉륫 ?섑뻾
+- ?뱤 **LSTM ?덉륫**: MCP Core? ?곕룞?섏뿬 由ъ냼???덉륫
+- ?슚 **?댁긽 ?먯?**: ?먮룞 ?댁긽 ?먯? 諛?Discord ?뚮┝
+- ?뙋 **CORS 吏??*: 紐⑤뱺 ?ㅻ━吏꾩뿉???묎렐 媛??
 
-### 처리 흐름
+### 泥섎━ ?먮쫫
 
 ```
-프론트엔드
-  ↓
-  ├─ GitHub URL: https://github.com/owner/repo
-  └─ 자연어: "피크타임에 1000명 정도 사용할 것 같아요"
-  ↓
-Backend API (이 서버)
-  ↓
-  ├─ 1. GitHub API → 저장소 메타데이터 수집
-  ├─ 2. Claude API → CPU/Memory/Users 추출
-  ├─ 3. MCPContext 생성
-  └─ 4. MCP Core /plans 호출
-  ↓
+?꾨줎?몄뿏??
+  ??
+  ?쒋? GitHub URL: https://github.com/owner/repo
+  ?붴? ?먯뿰?? "?쇳겕??꾩뿉 1000紐??뺣룄 ?ъ슜??寃?媛숈븘??
+  ??
+Backend API (???쒕쾭)
+  ??
+  ?쒋? 1. GitHub API ????μ냼 硫뷀??곗씠???섏쭛
+  ?쒋? 2. Claude API ??CPU/Memory/Users 異붿텧
+  ?쒋? 3. MCPContext ?앹꽦
+  ?붴? 4. MCP Core /plans ?몄텧
+  ??
 MCP Core
-  ↓
-  ├─ LSTM/Baseline 예측
-  ├─ Flavor 권장
-  ├─ 이상 탐지
-  └─ Discord 알림 (이상 발견 시)
-  ↓
-Backend API → 프론트엔드로 결과 반환
+  ??
+  ?쒋? LSTM/Baseline ?덉륫
+  ?쒋? Flavor 沅뚯옣
+  ?쒋? ?댁긽 ?먯?
+  ?붴? Discord ?뚮┝ (?댁긽 諛쒓껄 ??
+  ??
+Backend API ???꾨줎?몄뿏?쒕줈 寃곌낵 諛섑솚
 ```
 
-## 아키텍처
+## ?꾪궎?띿쿂
 
 ```
-┌─────────────────┐
-│   Frontend      │
-│  (React/Vue)    │
-└────────┬────────┘
-         │ POST /api/predict
-         │ {github_url, user_input}
-         ↓
-┌─────────────────┐
-│  Backend API    │  ← 이 서버
-│   (FastAPI)     │
-├─────────────────┤
-│ - GitHub API    │  저장소 정보 수집
-│ - Claude API    │  자연어 → JSON
-│ - MCP Core API  │  예측 요청
-└────────┬────────┘
-         │ POST /plans
-         │ {context, metric_name}
-         ↓
-┌─────────────────┐
-│   MCP Core      │
-│  (LSTM Model)   │
-├─────────────────┤
-│ - LSTM 예측     │
-│ - 이상 탐지     │
-│ - Discord 알림  │
-### 시나리오 2: 개발 환경 소규모
+?뚢???????????????????
+??  Frontend      ??
+?? (React/Vue)    ??
+?붴?????????р??????????
+         ??POST /api/predict
+         ??{github_url, user_input}
+         ??
+?뚢???????????????????
+?? Backend API    ?? ?????쒕쾭
+??  (FastAPI)     ??
+?쒋???????????????????
+??- GitHub API    ?? ??μ냼 ?뺣낫 ?섏쭛
+??- Claude API    ?? ?먯뿰????JSON
+??- MCP Core API  ?? ?덉륫 ?붿껌
+?붴?????????р??????????
+         ??POST /plans
+         ??{context, metric_name}
+         ??
+?뚢???????????????????
+??  MCP Core      ??
+?? (LSTM Model)   ??
+?쒋???????????????????
+??- LSTM ?덉륫     ??
+??- ?댁긽 ?먯?     ??
+??- Discord ?뚮┝  ??
+### ?쒕굹由ъ삤 2: 媛쒕컻 ?섍꼍 ?뚭퇋紐?
 
-**입력:**
+**?낅젰:**
 ```json
 {
   "github_url": "https://github.com/nodejs/node",
-  "user_input": "개발 환경에서 테스트, 50명 정도면 될 것 같아요"
+  "user_input": "媛쒕컻 ?섍꼍?먯꽌 ?뚯뒪?? 50紐??뺣룄硫???寃?媛숈븘??
 }
 ```
 
-**Claude가 자동 추출:**
+**Claude媛 ?먮룞 異붿텧:**
 ```json
 {
   "service_type": "web",
@@ -98,21 +98,21 @@ Backend API → 프론트엔드로 결과 반환
   "runtime_env": "dev",
   "curr_cpu": 1.0,
   "curr_mem": 2048.0,
-  "reasoning": "개발환경 50명 → 1 CPU, 2GB 충분"
+  "reasoning": "媛쒕컻?섍꼍 50紐???1 CPU, 2GB 異⑸텇"
 }
 ```
 
-### 시나리오 3: 주말 트래픽
+### ?쒕굹由ъ삤 3: 二쇰쭚 ?몃옒??
 
-**입력:**
+**?낅젰:**
 ```json
 {
   "github_url": "https://github.com/django/django",
-  "user_input": "주말에는 1000명 정도 예상됩니다"
+  "user_input": "二쇰쭚?먮뒗 1000紐??뺣룄 ?덉긽?⑸땲??
 }
 ```
 
-**Claude가 자동 추출:**
+**Claude媛 ?먮룞 異붿텧:**
 ```json
 {
   "service_type": "web",
@@ -121,15 +121,15 @@ Backend API → 프론트엔드로 결과 반환
   "runtime_env": "prod",
   "curr_cpu": 2.0,
   "curr_mem": 4096.0,
-  "reasoning": "주말 1000명 → 2 CPU, 4GB"
+  "reasoning": "二쇰쭚 1000紐???2 CPU, 4GB"
 }
 ```
 
-## 트러블슈팅
+## ?몃윭釉붿뒋??
 
-### Claude API 키가 없을 때
+### Claude API ?ㅺ? ?놁쓣 ??
 
-**증상:**
+**利앹긽:**
 ```json
 {
   "extracted_context": {
@@ -138,181 +138,181 @@ Backend API → 프론트엔드로 결과 반환
 }
 ```
 
-**해결:**
-1. `.env` 파일에 `ANTHROPIC_API_KEY` 설정
-2. [Anthropic Console](https://console.anthropic.com/)에서 키 발급
-3. 서버 재시작
+**?닿껐:**
+1. `.env` ?뚯씪??`ANTHROPIC_API_KEY` ?ㅼ젙
+2. [Anthropic Console](https://console.anthropic.com/)?먯꽌 ??諛쒓툒
+3. ?쒕쾭 ?ъ떆??
 
-### MCP Core 연결 실패
+### MCP Core ?곌껐 ?ㅽ뙣
 
-**증상:**
+**利앹긽:**
 ```json
 {
   "detail": "MCP Core error: 500"
 }
 ```
 
-**해결:**
-1. MCP Core 서버 실행 확인:
+**?닿껐:**
+1. MCP Core ?쒕쾭 ?ㅽ뻾 ?뺤씤:
    ```bash
    curl http://localhost:8000/health
    ```
-2. `.env`에서 `MCP_CORE_URL` 확인
-3. MCP Core 로그 확인
+2. `.env`?먯꽌 `MCP_CORE_URL` ?뺤씤
+3. MCP Core 濡쒓렇 ?뺤씤
 
 ### GitHub API Rate Limit
 
-**증상:**
+**利앹긽:**
 ```json
 {
   "detail": "GitHub API error: 403"
 }
 ```
 
-**해결:**
-1. `.env`에 `GITHUB_TOKEN` 설정
-2. [GitHub Settings → Developer settings → Personal access tokens](https://github.com/settings/tokens)에서 토큰 생성
-3. 권한: `public_repo` (공개 저장소만 접근 시)
+**?닿껐:**
+1. `.env`??`GITHUB_TOKEN` ?ㅼ젙
+2. [GitHub Settings ??Developer settings ??Personal access tokens](https://github.com/settings/tokens)?먯꽌 ?좏겙 ?앹꽦
+3. 沅뚰븳: `public_repo` (怨듦컻 ??μ냼留??묎렐 ??
 
-### CORS 에러
+### CORS ?먮윭
 
-**증상 (브라우저 콘솔):**
+**利앹긽 (釉뚮씪?곗? 肄섏넄):**
 ```
 Access to fetch at 'http://localhost:8001/api/predict' from origin 'http://localhost:3000' 
 has been blocked by CORS policy
 ```
 
-**해결:**
-- 이 서버는 이미 모든 오리진 허용 (`allow_origins=["*"]`)
-- 브라우저 캐시 삭제 후 재시도
+**?닿껐:**
+- ???쒕쾭???대? 紐⑤뱺 ?ㅻ━吏??덉슜 (`allow_origins=["*"]`)
+- 釉뚮씪?곗? 罹먯떆 ??젣 ???ъ떆??
 
-### Python 패키지 없음
+### Python ?⑦궎吏 ?놁쓬
 
-**증상:**
+**利앹긽:**
 ```
 ModuleNotFoundError: No module named 'fastapi'
 ```
 
-**해결:**
+**?닿껐:**
 ```bash
 pip install -r requirements.txt
 ```
 
-## 환경변수 상세
+## ?섍꼍蹂???곸꽭
 
-| 변수 | 필수 | 기본값 | 설명 |
+| 蹂??| ?꾩닔 | 湲곕낯媛?| ?ㅻ챸 |
 |------|------|--------|------|
-| `ANTHROPIC_API_KEY` | ✅ | - | Claude API 키 |
-| `MCP_CORE_URL` | ❌ | `http://localhost:8000` | MCP Core 서버 주소 |
-| `GITHUB_TOKEN` | ❌ | - | GitHub API 토큰 (Rate Limit 완화) |
-| `BACKEND_PORT` | ❌ | `8001` | Backend API 포트 |
+| `ANTHROPIC_API_KEY` | ??| - | Claude API ??|
+| `MCP_CORE_URL` | ??| `http://localhost:8000` | MCP Core ?쒕쾭 二쇱냼 |
+| `GITHUB_TOKEN` | ??| - | GitHub API ?좏겙 (Rate Limit ?꾪솕) |
+| `BACKEND_PORT` | ??| `8001` | Backend API ?ы듃 |
 
-## 성능 최적화
+## ?깅뒫 理쒖쟻??
 
 ### Rate Limiting
 
 GitHub API Rate Limit:
-- **인증 없음**: 60회/시간
-- **인증 있음**: 5000회/시간
+- **?몄쬆 ?놁쓬**: 60???쒓컙
+- **?몄쬆 ?덉쓬**: 5000???쒓컙
 
-→ `GITHUB_TOKEN` 설정 권장
+??`GITHUB_TOKEN` ?ㅼ젙 沅뚯옣
 
-### Timeout 설정
+### Timeout ?ㅼ젙
 
 ```python
-# GitHub API: 10초
-# Claude API: 30초
-# MCP Core: 30초
+# GitHub API: 10珥?
+# Claude API: 30珥?
+# MCP Core: 30珥?
 ```
 
-### 캐싱
+### 罹먯떛
 
-현재 캐싱 미구현. 추후 Redis 추가 예정.
+?꾩옱 罹먯떛 誘멸뎄?? 異뷀썑 Redis 異붽? ?덉젙.
 
-## 라이센스
+## ?쇱씠?쇱뒪
 
 MIT License
 
-## 기여
+## 湲곗뿬
 
-Pull Request 환영합니다!
+Pull Request ?섏쁺?⑸땲??
 
-## 문의
+## 臾몄쓽
 
-이슈: [GitHub Issues](https://github.com/your-repo/issues)
+?댁뒋: [GitHub Issues](https://github.com/your-repo/issues)
 
 ---
 
-**Made with ❤️ by MCP Team**
+**Made with ?ㅿ툘 by MCP Team**
 
-## 설치
+## ?ㅼ튂
 
-## 설치
+## ?ㅼ튂
 
-### 1. 환경변수 설정
+### 1. ?섍꼍蹂???ㅼ젙
 
-`.env` 파일 생성:
+`.env` ?뚯씪 ?앹꽦:
 
 ```bash
-# 필수: Claude API 키
+# ?꾩닔: Claude API ??
 ANTHROPIC_API_KEY=sk-ant-api03-...
 
-# 선택: MCP Core 서버 주소 (기본: http://localhost:8000)
+# ?좏깮: MCP Core ?쒕쾭 二쇱냼 (湲곕낯: http://localhost:8000)
 MCP_CORE_URL=http://localhost:8000
 
-# 선택: GitHub API 토큰 (Rate Limit 완화용)
+# ?좏깮: GitHub API ?좏겙 (Rate Limit ?꾪솕??
 GITHUB_TOKEN=ghp_...
 
-# 선택: Backend API 포트 (기본: 8001)
+# ?좏깮: Backend API ?ы듃 (湲곕낯: 8001)
 BACKEND_PORT=8001
 ```
 
-**Claude API 키 발급:**
-1. [Anthropic Console](https://console.anthropic.com/) 접속
-2. API Keys → Create Key
-3. `.env` 파일에 `ANTHROPIC_API_KEY` 설정
+**Claude API ??諛쒓툒:**
+1. [Anthropic Console](https://console.anthropic.com/) ?묒냽
+2. API Keys ??Create Key
+3. `.env` ?뚯씪??`ANTHROPIC_API_KEY` ?ㅼ젙
 
-### 2. 패키지 설치
+### 2. ?⑦궎吏 ?ㅼ튂
 
 ```bash
 cd backend_api
 pip install -r requirements.txt
 ```
 
-**필요한 패키지:**
-- `fastapi`: Web 프레임워크
-- `uvicorn`: ASGI 서버
-- `httpx`: 비동기 HTTP 클라이언트
-- `anthropic`: Claude API 클라이언트
-- `pydantic`: 데이터 검증
-- `python-dotenv`: 환경변수 로드
+**?꾩슂???⑦궎吏:**
+- `fastapi`: Web ?꾨젅?꾩썙??
+- `uvicorn`: ASGI ?쒕쾭
+- `httpx`: 鍮꾨룞湲?HTTP ?대씪?댁뼵??
+- `anthropic`: Claude API ?대씪?댁뼵??
+- `pydantic`: ?곗씠??寃利?
+- `python-dotenv`: ?섍꼍蹂??濡쒕뱶
 
-### 3. 서버 시작
+### 3. ?쒕쾭 ?쒖옉
 
-**방법 1: 직접 실행**
+**諛⑸쾿 1: 吏곸젒 ?ㅽ뻾**
 ```bash
 python main.py
 ```
 
-**방법 2: uvicorn 사용**
+**諛⑸쾿 2: uvicorn ?ъ슜**
 ```bash
 uvicorn main:app --reload --port 8001
 ```
 
-**성공 시 출력:**
+**?깃났 ??異쒕젰:**
 ```
-🚀 Backend API: http://localhost:8001
-🤖 Claude: enabled
-📡 MCP Core: http://localhost:8000
-🔑 GitHub Token: configured
+?? Backend API: http://localhost:8001
+?쨼 Claude: enabled
+?뱻 MCP Core: http://localhost:8000
+?뵎 GitHub Token: configured
 
-💡 Tip: Set ANTHROPIC_API_KEY in .env file
+?뮕 Tip: Set ANTHROPIC_API_KEY in .env file
 INFO:     Uvicorn running on http://0.0.0.0:8001
 ```
 
-## 사용법
+## ?ъ슜踰?
 
-### 프론트엔드에서 호출
+### ?꾨줎?몄뿏?쒖뿉???몄텧
 
 #### JavaScript (Fetch API)
 
@@ -325,7 +325,7 @@ async function predictResources() {
     },
     body: JSON.stringify({
       github_url: 'https://github.com/fastapi/fastapi',
-      user_input: '피크타임에 5000명 예상됩니다. CPU는 많이 필요할 것 같아요.'
+      user_input: '?쇳겕??꾩뿉 5000紐??덉긽?⑸땲?? CPU??留롮씠 ?꾩슂??寃?媛숈븘??'
     })
   });
   
@@ -370,9 +370,9 @@ function PredictForm() {
       <textarea
         value={userInput}
         onChange={(e) => setUserInput(e.target.value)}
-        placeholder="자연어 입력 (예: 피크타임에 1000명 사용)"
+        placeholder="?먯뿰???낅젰 (?? ?쇳겕??꾩뿉 1000紐??ъ슜)"
       />
-      <button type="submit">예측</button>
+      <button type="submit">?덉륫</button>
       
       {result && <pre>{JSON.stringify(result, null, 2)}</pre>}
     </form>
@@ -387,7 +387,7 @@ import requests
 
 response = requests.post('http://localhost:8001/api/predict', json={
     'github_url': 'https://github.com/fastapi/fastapi',
-    'user_input': '피크타임에 5000명 정도 사용할 것 같습니다.'
+    'user_input': '?쇳겕??꾩뿉 5000紐??뺣룄 ?ъ슜??寃?媛숈뒿?덈떎.'
 })
 
 print(response.json())
@@ -400,30 +400,30 @@ curl -X POST http://localhost:8001/api/predict \
   -H "Content-Type: application/json" \
   -d '{
     "github_url": "https://github.com/fastapi/fastapi",
-    "user_input": "피크타임에 5000명 예상됩니다."
+    "user_input": "?쇳겕??꾩뿉 5000紐??덉긽?⑸땲??"
   }'
 ```
 
-## API 문서
+## API 臾몄꽌
 
 ### POST /api/predict
 
-완전 자동화 예측 엔드포인트
+?꾩쟾 ?먮룞???덉륫 ?붾뱶?ъ씤??
 
 #### Request Body
 
 ```json
 {
-  "github_url": "string",    // GitHub 저장소 URL (필수)
-  "user_input": "string"     // 자연어 요청사항 (필수)
+  "github_url": "string",    // GitHub ??μ냼 URL (?꾩닔)
+  "user_input": "string"     // ?먯뿰???붿껌?ы빆 (?꾩닔)
 }
 ```
 
-**자연어 입력 예시:**
-- "피크타임에 1000명 정도 사용할 것 같아요"
-- "주말에 100명, CPU 2개면 될 것 같습니다"
-- "개발 환경에서 테스트, 50명 정도"
-- "프로덕션, 5000명 이상 예상"
+**?먯뿰???낅젰 ?덉떆:**
+- "?쇳겕??꾩뿉 1000紐??뺣룄 ?ъ슜??寃?媛숈븘??
+- "二쇰쭚??100紐? CPU 2媛쒕㈃ ??寃?媛숈뒿?덈떎"
+- "媛쒕컻 ?섍꼍?먯꽌 ?뚯뒪?? 50紐??뺣룄"
+- "?꾨줈?뺤뀡, 5000紐??댁긽 ?덉긽"
 
 #### Response
 
@@ -432,7 +432,7 @@ curl -X POST http://localhost:8001/api/predict \
   "success": true,
   "github_info": {
     "full_name": "owner/repo",
-    "description": "저장소 설명",
+    "description": "??μ냼 ?ㅻ챸",
     "language": "Python",
     "stars": 1234,
     "forks": 567
@@ -443,7 +443,7 @@ curl -X POST http://localhost:8001/api/predict \
     "time_slot": "peak",
     "curr_cpu": 4.0,
     "curr_mem": 8192.0,
-    "reasoning": "5000명 사용자 → 4 CPU, 8192 MB 권장"
+    "reasoning": "5000紐??ъ슜????4 CPU, 8192 MB 沅뚯옣"
   },
   "predictions": {
     "lstm": {
@@ -458,7 +458,7 @@ curl -X POST http://localhost:8001/api/predict \
   "recommendations": {
     "flavor": "m5.xlarge",
     "cost_per_day": 4.32,
-    "notes": "LSTM 모델 기반 권장"
+    "notes": "LSTM 紐⑤뜽 湲곕컲 沅뚯옣"
   }
 }
 ```
@@ -473,7 +473,7 @@ curl -X POST http://localhost:8001/api/predict \
 
 ### GET /health
 
-서버 헬스 체크
+?쒕쾭 ?ъ뒪 泥댄겕
 
 #### Response
 
@@ -484,19 +484,19 @@ curl -X POST http://localhost:8001/api/predict \
 }
 ```
 
-## 예제
+## ?덉젣
 
-### 시나리오 1: 피크타임 대량 사용자
+### ?쒕굹由ъ삤 1: ?쇳겕???????ъ슜??
 
-**입력:**
+**?낅젰:**
 ```json
 {
   "github_url": "https://github.com/facebook/react",
-  "user_input": "피크타임에 10000명 이상 예상됩니다. 트래픽이 많을 것 같아요."
+  "user_input": "?쇳겕??꾩뿉 10000紐??댁긽 ?덉긽?⑸땲?? ?몃옒?쎌씠 留롮쓣 寃?媛숈븘??"
 }
 ```
 
-**Claude가 자동 추출:**
+**Claude媛 ?먮룞 異붿텧:**
 ```json
 {
   "service_type": "web",
@@ -505,13 +505,13 @@ curl -X POST http://localhost:8001/api/predict \
   "runtime_env": "prod",
   "curr_cpu": 8.0,
   "curr_mem": 16384.0,
-  "reasoning": "10000명+ → 8 CPU, 16GB 권장"
+  "reasoning": "10000紐? ??8 CPU, 16GB 沅뚯옣"
 }
 ```
 
-### 시나리오 2: 개발 환경 소규모
+### ?쒕굹由ъ삤 2: 媛쒕컻 ?섍꼍 ?뚭퇋紐?
 
-**입력:**
+**?낅젰:**
 
 ```json
 {
@@ -527,7 +527,7 @@ curl -X POST http://localhost:8001/api/predict \
     "time_slot": "peak",
     "curr_cpu": 4.0,
     "curr_mem": 8192.0,
-    "reasoning": "명시적 사용자 수와 피크타임 지정"
+    "reasoning": "紐낆떆???ъ슜???섏? ?쇳겕???吏??
   },
   "predictions": {
     "predictions": [...]
@@ -539,15 +539,16 @@ curl -X POST http://localhost:8001/api/predict \
 }
 ```
 
-## 동작 원리
+## ?숈옉 ?먮━
 
-1. **GitHub 분석**: GitHub API로 저장소 메타데이터
-2. **Claude 파싱**: 자연어 → CPU/Memory/Users 자동 추출
-3. **MCPContext 생성**: /plans 형식으로 변환
-4. **MCP Core 호출**: LSTM 예측, Flavor 추천, 이상 탐지
-5. **결과 반환**: 프론트엔드에 JSON 응답
+1. **GitHub 遺꾩꽍**: GitHub API濡???μ냼 硫뷀??곗씠??
+2. **Claude ?뚯떛**: ?먯뿰????CPU/Memory/Users ?먮룞 異붿텧
+3. **MCPContext ?앹꽦**: /plans ?뺤떇?쇰줈 蹂??
+4. **MCP Core ?몄텧**: LSTM ?덉륫, Flavor 異붿쿇, ?댁긽 ?먯?
+5. **寃곌낵 諛섑솚**: ?꾨줎?몄뿏?쒖뿉 JSON ?묐떟
 
 ---
 
-**포트**: 8001  
-**문서**: http://localhost:8001/docs
+**?ы듃**: 8001  
+**臾몄꽌**: http://localhost:8001/docs
+

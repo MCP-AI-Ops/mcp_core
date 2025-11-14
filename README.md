@@ -10,22 +10,22 @@
 
 ---
 
-## 🎯 MVP 핵심 가치
+## MVP 핵심 가치
 
 ### 사용자 경험
 ```
 프론트엔드에서 입력:
-  📝 "피크타임에 5000명 정도 사용할 것 같아요"
-  🔗 https://github.com/fastapi/fastapi
+  "피크타임에 5000명 정도 사용할 것 같아요"
+  https://github.com/fastapi/fastapi
 
      ↓ 완전 자동화
 
 결과:
-  ✅ CPU: 4.2 코어 예측
-  ✅ Memory: 8500 MB 예측
-  ✅ 권장 Flavor: m5.xlarge
-  ✅ 예상 비용: $4.32/day
-  ✅ 24시간 시계열 그래프
+  CPU: 4.2 코어 예측
+  Memory: 8500 MB 예측
+  권장 Flavor: m5.xlarge
+  예상 비용: $4.32/day
+  24시간 시계열 그래프
 ```
 
 ### 전체 흐름
@@ -49,7 +49,7 @@
 │   MCP Core      │  예측 엔진
 │  (LSTM Model)   │  - LSTM/Baseline 예측
 ├─────────────────┤  - Flavor 권장
-│ 🤖 TensorFlow   │  - 이상 탐지
+│ TensorFlow   │  - 이상 탐지
 │ 📊 Time Series  │  - Discord 알림
 └────────┬────────┘
          │
@@ -293,7 +293,7 @@ if abs(z_score) > 2.0:
 
 ---
 
-## 🚀 빠른 시작 (MVP)
+## 빠른 시작 (MVP)
 
 ### 사전 요구사항
 
@@ -422,7 +422,7 @@ python test_anomaly_discord.py
 
 ---
 
-## 🧪 테스트 & 검증
+## 테스트 & 검증
 
 ### 자동 테스트
 
@@ -455,12 +455,12 @@ python test_anomaly_discord.py
 ```
 
 **검증 항목:**
-- ✅ Python 버전
-- ✅ 필수 패키지 설치
-- ✅ 환경변수 설정
-- ✅ 모델 파일 존재
-- ✅ 포트 사용 가능 여부
-- ✅ Docker 실행 여부 (배포 시)
+- Python 버전
+- 필수 패키지 설치
+- 환경변수 설정
+- 모델 파일 존재
+- 포트 사용 가능 여부
+- Docker 실행 여부 (배포 시)
 
 ---
 
@@ -571,7 +571,7 @@ cat .env | grep DATABASE_URL
 
 ---
 
-## 🚀 배포 체크리스트
+## 배포 체크리스트
 
 ### 배포 전
 
