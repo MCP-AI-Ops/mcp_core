@@ -1,0 +1,8 @@
+{
+    "context_id": "sample-context-1",
+    "timestamp": "2025-01-01T00:00:00Z",
+    "service_type": "web",
+    "runtime_env": "prod",
+    "time_slot": "normal",
+    "weight": 1.0
+}

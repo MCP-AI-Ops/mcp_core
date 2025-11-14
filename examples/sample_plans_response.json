@@ -1,0 +1,16 @@
+{
+    "service_id": "string",
+    "metric_name": "total_events",
+    "context": {
+      "context_id": "string",
+      "timestamp": "2025-11-08T18:44:10.519Z",
+      "service_type": "web",
+      "runtime_env": "prod",
+      "time_slot": "normal",
+      "weight": 1,
+      "region": "string",
+      "expected_users": 0,
+      "curr_cpu": 0,
+      "curr_mem": 0
+    }
+  }

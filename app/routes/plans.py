@@ -20,24 +20,27 @@
 from fastapi import APIRouter
 from datetime import datetime
 import logging
+from typing import Dict
 
 from app.models.plans import PlansRequest, PlansResponse
 from app.core.context_extractor import extract_context
 from app.core.router import select_route
-from app.core.predictor import BaselinePredictor, LSTMPredictor
 from app.core.policy import postprocess_predictions
 from app.core.errors import PredictionError
-
+from app.core.predictor.base import BasePredictor
 from app.core.predictor.baseline_predictor import BaselinePredictor
 from app.core.predictor.lstm_predictor import LSTMPredictor
 from app.core.anomaly import detect_anomaly
 from app.core.alerts.discord_alert import send_discord_alert
 import os
 
-router = APIRouter()
+router = APIRouter(
+    prefix="",
+    tags=["plans"],
+)
 
 # 지연 생성용 레지스트리: 앱 시작 시 무거운 모델/IO를 실행하지 않기 위함
-_PREDICTORS: dict[str, object] = {}
+_PREDICTORS: Dict[str, BasePredictor] = {}
 
 
 def get_predictor(kind: str):
@@ -50,20 +53,18 @@ def get_predictor(kind: str):
     return _PREDICTORS[kind]
 
 
-def pick_engine(model_version: str):
-    # 규칙: 이름에 "lstm" 있으면 lstm 예측기, 아니면 baseline
+def pick_engine(model_version: str) -> BasePredictor:
     """
     model_version 문자열에 'lstm'이 포함된 경우 LSTMPredictor,
     그 외에는 BaselinePredictor를 반환한다.
     """
-    
-    if "lstm" in model_version:
+    if "lstm" in model_version.lower():
         return get_predictor("lstm")
     return get_predictor("baseline")
 
 
 @router.post("", response_model=PlansResponse)
-def make_plan(req: PlansRequest):
+def make_plan(req: PlansRequest):ㄴ
     """
     핵심 예측 플로우:
 
@@ -79,10 +80,13 @@ def make_plan(req: PlansRequest):
       즉, /plans의 요청/응답 스펙은 프런트와 배포 파이프라인이 의존하는 계약(Contract)이므로
       함부로 깨면 안 된다.
     """
-    
+    # 1) context 파싱/검증
     ctx = extract_context(req.context.model_dump())
+    
+    # 2) 라우팅으로 모델 버전 결정
     model_version, path = select_route(ctx)
 
+    # 3) 예측 엔진 선택
     predictor = pick_engine(model_version)
 
     try:
@@ -93,6 +97,7 @@ def make_plan(req: PlansRequest):
         fallback = get_predictor("baseline")
         raw_pred = fallback.run(github_url=req.github_url, metric_name=req.metric_name, ctx=ctx, model_version=model_version)
 
+    # 4) policy 후처리
     final_pred = postprocess_predictions(raw_pred, ctx)
 
     # Flavor 추천 로직 개선: 예측값과 입력 컨텍스트를 함께 고려

@@ -132,7 +132,29 @@ CSV_DATA_PATH=data/lstm_ready_cluster_data.csv
 # Discord 알림 (선택)
 DISCORD_WEBHOOK_URL=your_webhook_url
 DISCORD_BOT_NAME=MCP-dangerous
+
+# OpenStack 설정 (VM 배포 시 필요)
+OS_AUTH_URL=http://localhost:5000/v3
+OS_USERNAME=admin
+OS_PASSWORD=secretadmin
+OS_PROJECT_NAME=admin
+OS_REGION_NAME=RegionOne
 ```
+
+### ⚠️ 중요: .env 파일 변경 후 재시작 필요
+
+`.env` 파일을 수정한 후에는 **반드시 서버를 재시작**해야 변경사항이 반영됩니다:
+
+```bash
+# 실행 중인 서버를 중지 (Ctrl+C) 후 다시 시작
+poetry run uvicorn app.main:app --reload
+
+# 또는 poetry shell 사용 시
+poetry env activate
+uvicorn app.main:app --reload
+```
+
+**참고:** `--reload` 옵션은 코드 변경 시 자동 재시작하지만, `.env` 파일 변경은 감지하지 않습니다. 수동으로 재시작해야 합니다.
 
 ## 8. 프로젝트 구조
 
@@ -149,3 +171,41 @@ DISCORD_BOT_NAME=MCP-dangerous
 - 이 프로젝트는 `package-mode = false`로 설정되어 있어 의존성 관리만 Poetry로 수행합니다
 - Python 3.10 이상이 필요합니다
 - 가상환경은 Poetry가 자동으로 관리하므로 별도로 생성할 필요가 없습니다
+
+## 10. 현재 사용 버전 상태
+- python: 3.12
+
+## 11. FastAPI 서버 띄우기
+
+구조가 README대로라면 대략:
+
+poetry run uvicorn app.main:app --reload
+
+
+브라우저에서 http://localhost:8000/docs 열어 Swagger UI 들어가지는지 확인
+👉 여기까지 되면 MCP Core를 로컬에서 돌릴 수 있는 상태가 됨.
+
+### /plans Contact 예시
+```
+curl -X 'POST' \
+  'http://localhost:8000/plans' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "service_id": "demo-service",
+  "metric_name": "total_events",
+  "context": {
+    "context_id": "ctx-1234",
+    "timestamp": "2025-11-08T18:44:10.519Z",
+    "service_type": "web",
+    "runtime_env": "prod",
+    "time_slot": "normal",
+    "weight": 1,
+    "region": "ap-northeast-2",
+    "expected_users": 100,
+    "curr_cpu": 0.25,
+    "curr_mem": 0.35
+  }
+}
+'
+```
