@@ -95,18 +95,33 @@ def make_plan(req: PlansRequest):
 
     final_pred = postprocess_predictions(raw_pred, ctx)
 
-    # (더미) cost 룰
+    # Flavor 추천 로직 개선: 예측값과 입력 컨텍스트를 함께 고려
     max_val = max((p.value for p in final_pred.predictions), default=0)
-    recommended_flavor = "small"
-    if max_val > 0.7:
+    avg_val = sum(p.value for p in final_pred.predictions) / len(final_pred.predictions) if final_pred.predictions else 0
+    
+    # 입력 컨텍스트 기반 기본 사이즈 결정
+    expected_users = ctx.expected_users or 100
+    base_flavor = "small"
+    if expected_users > 1000:
+        base_flavor = "medium"
+    if expected_users > 10000:
+        base_flavor = "large"
+    
+    # 예측값 기반 조정 (평균값 기준, 더 보수적)
+    recommended_flavor = base_flavor
+    if avg_val > 0.75 and base_flavor == "small":
         recommended_flavor = "medium"
-    if max_val > 0.9:
+    if avg_val > 0.85 and base_flavor == "medium":
         recommended_flavor = "large"
+    if max_val > 0.95:  # 극단적인 피크만 large 강제
+        recommended_flavor = "large"
+    
     expected_cost_per_day = {"small": 1.2, "medium": 2.8, "large": 5.5}[recommended_flavor]
 
     # 이상 탐지 및 Discord 알림 (비차단)
     try:
-        z_thresh = float(os.getenv("ANOMALY_Z_THRESH", "3.0"))
+        # Z-score 임계값: 기본 5.0 (더 높게 설정하여 false positive 감소)
+        z_thresh = float(os.getenv("ANOMALY_Z_THRESH", "5.0"))
         anomaly = detect_anomaly(final_pred, ctx, z_thresh=z_thresh)
         if anomaly.get("anomaly_detected"):
             webhook = os.getenv("DISCORD_WEBHOOK_URL") or os.getenv("DISCORD_WEBHOOK")

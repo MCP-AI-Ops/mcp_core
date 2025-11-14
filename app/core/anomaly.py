@@ -1,6 +1,6 @@
 """
-간단한 통계 기반 이상 탐지 모듈.
-최근 예측 결과와 과거 데이터를 비교해 z-score를 계산한다.
+Google Cluster 데이터의 극값과 long-tail 분포 특성을 고려한 이상 탐지.
+노트북의 EnhancedLSTMPredictor 알고리즘 기반.
 """
 
 from __future__ import annotations
@@ -20,9 +20,14 @@ def detect_anomaly(
     pred: PredictionResult,
     ctx: MCPContext,
     hours: int = 168,
-    z_thresh: float = 3.0,
+    z_thresh: float = 5.0,
 ) -> Dict[str, Any]:
-    """과거 평균·표준편차 대비 이상 여부를 판단한다."""
+    """
+    노트북의 robust 알고리즘 기반 이상 탐지:
+    1. Percentile 기반 이상치 제거 (5%-95%)
+    2. 동적 임계값 (mean + threshold_multiplier * std)
+    3. 다차원 특성 고려 (현재값, 6시간 평균, 변화율, 표준편차)
+    """
     try:
         ds = get_data_source()
     except Exception as exc:
@@ -44,36 +49,104 @@ def detect_anomaly(
     if len(hist) == 0:
         return {"anomaly_detected": False, "score": 0.0, "reason": "과거 데이터 없음"}
 
+    # === 1. Robust 통계 계산 (노트북 방식) ===
+    # Percentile 기반 이상치 제거: 상하위 5% 제거
+    p5, p95 = np.percentile(hist, [5, 95])
+    hist_clean = hist[(hist >= p5) & (hist <= p95)]
+    
+    if len(hist_clean) < 10:  # 최소 데이터 보장
+        hist_clean = hist
+    
+    # IQR 기반 추가 필터링 (노트북의 _handle_outliers 방식)
+    Q1 = np.percentile(hist_clean, 25)
+    Q3 = np.percentile(hist_clean, 75)
+    IQR = Q3 - Q1
+    
+    if IQR > 0:
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        hist_robust = hist_clean[(hist_clean >= lower_bound) & (hist_clean <= upper_bound)]
+        
+        if len(hist_robust) >= 10:
+            hist_clean = hist_robust
+
     meta = get_metric_meta(pred.metric_name)
     if meta.kind == "ratio":
         hi = meta.clamp_max if meta.clamp_max is not None else 1.0
-        hist = np.clip(hist, meta.clamp_min, hi)
+        hist_clean = np.clip(hist_clean, meta.clamp_min, hi)
     else:
-        hist = np.maximum(hist, meta.clamp_min)
+        hist_clean = np.maximum(hist_clean, meta.clamp_min)
 
-    hist_mean = float(np.mean(hist))
-    hist_std = float(np.std(hist))
-    max_pred = float(max((p.value for p in pred.predictions), default=0.0))
+    # Robust 통계 (median 기반)
+    hist_median = float(np.median(hist_clean))
+    hist_mean = float(np.mean(hist_clean))
+    hist_std = float(np.std(hist_clean))
+    
+    # === 2. 예측값 처리 ===
+    pred_values = np.array([p.value for p in pred.predictions])
+    max_pred = float(np.max(pred_values))
+    avg_pred = float(np.mean(pred_values))
+    
     if meta.kind == "ratio":
         max_pred = meta.clamp(max_pred)
-    elif max_pred < meta.clamp_min:
-        max_pred = meta.clamp_min
-
-    if math.isclose(hist_std, 0.0):
-        score = (max_pred / hist_mean) if hist_mean > 0 else float("inf")
+        avg_pred = meta.clamp(avg_pred)
     else:
-        score = (max_pred - hist_mean) / hist_std
+        max_pred = max(max_pred, meta.clamp_min)
+        avg_pred = max(avg_pred, meta.clamp_min)
 
+    # === 3. 다차원 이상 탐지 (노트북 방식) ===
+    # 3.1 평균 기반 점수 (더 안정적)
     if hist_std > 0:
-        anomaly = score >= z_thresh
+        score_avg = (avg_pred - hist_mean) / hist_std
     else:
-        anomaly = score >= 2.0 if hist_mean > 0 else False
+        score_avg = (avg_pred / hist_median) - 1.0 if hist_median > 0 else 0.0
+    
+    # 3.2 최대값 기반 점수
+    if hist_std > 0:
+        score_max = (max_pred - hist_mean) / hist_std
+    else:
+        score_max = (max_pred / hist_median) - 1.0 if hist_median > 0 else 0.0
+    
+    # 3.3 변화율 점수 (노트북의 change_rate)
+    if hist_median > 0:
+        change_rate = (avg_pred - hist_median) / hist_median
+    else:
+        change_rate = 0.0
+    
+    # 3.4 종합 점수 (가중 평균)
+    combined_score = (
+        0.4 * score_avg +      # 평균 기반 (안정성)
+        0.3 * score_max +      # 최대값 기반 (극값 감지)
+        0.3 * abs(change_rate) # 변화율 (급격한 변화)
+    )
+    
+    # === 4. 동적 임계값 (노트북의 threshold_multiplier 방식) ===
+    # z_thresh를 threshold_multiplier로 해석
+    threshold_multiplier = z_thresh / 2.5  # 5.0 → 2.0 배수
+    dynamic_threshold = threshold_multiplier
+    
+    # === 5. 이상 판정 ===
+    # 여러 조건 중 하나라도 만족하면 이상
+    is_anomaly = (
+        combined_score >= dynamic_threshold or  # 종합 점수
+        score_max >= (dynamic_threshold * 1.5) or  # 극값 스파이크
+        abs(change_rate) >= 1.0  # 100% 이상 급증
+    )
 
     return {
-        "anomaly_detected": bool(anomaly),
-        "score": float(score),
-        "max_pred": max_pred,
-        "hist_mean": hist_mean,
-        "hist_std": hist_std,
-        "threshold": z_thresh,
+        "anomaly_detected": bool(is_anomaly),
+        "score": float(combined_score),
+        "score_breakdown": {
+            "avg_based": float(score_avg),
+            "max_based": float(score_max),
+            "change_rate": float(change_rate),
+        },
+        "max_pred": float(max_pred),
+        "avg_pred": float(avg_pred),
+        "hist_mean": float(hist_mean),
+        "hist_median": float(hist_median),
+        "hist_std": float(hist_std),
+        "threshold": float(dynamic_threshold),
+        "data_points_used": len(hist_clean),
+        "outliers_removed": len(hist) - len(hist_clean),
     }
