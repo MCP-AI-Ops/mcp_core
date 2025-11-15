@@ -3,7 +3,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.models.model_user import User, UserCreate
+from app.models.model_user import User, UserCreate, UserProfile
 from app.core.security import hash_password, verify_password, create_access_token, get_current_user
 from app.core.db import get_db
 
@@ -31,6 +31,19 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_access_token({"sub": db_user.email})
     return {"access_token": token, "token_type": "bearer"}
+
+@router.get("/profile", response_model=UserProfile)
+def get_profile(
+    email: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """사용자 프로필 정보 조회"""
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # from_attributes=True 설정으로 SQLAlchemy 모델을 직접 변환 가능
+    return UserProfile.model_validate(user)
 
 @router.put("/profile")
 def update_profile(

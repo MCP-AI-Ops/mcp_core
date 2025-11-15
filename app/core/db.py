@@ -5,22 +5,32 @@ DATABASE_URL 환경 변수가 설정된 경우에만 SQLAlchemy 사용.
 
 테이블 구조 (schema_mvp.sql): repositories, plan_requests, predictions,
 anomaly_detections, alert_history.
+
+User, Project 테이블은 SQLite를 사용
 """
 from __future__ import annotations
 
 import os
 import json
 from contextlib import contextmanager
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Generator
 
+# MySQL용 (예측 데이터 저장용, 선택적)
 DATABASE_URL = os.getenv("DATABASE_URL")  # 예: mysql+pymysql://user:pass@host/db
+
+# SQLite용 (User, Project 테이블용, 필수)
+SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL", "sqlite:///./test.db")
 
 _engine = None
 SessionLocal = None
 
+# SQLite 엔진 및 세션 (User, Project용)
+_sqlite_engine = None
+_sqlite_session_local = None
+
 
 def _init_engine():
-    """엔진 및 세션 팩토리 초기화."""
+    """MySQL 엔진 및 세션 팩토리 초기화 (예측 데이터용, 선택적)."""
     global _engine, SessionLocal
     if not DATABASE_URL:
         return
@@ -34,7 +44,25 @@ def _init_engine():
         print(f"[db] 엔진 초기화 실패: {e}")
 
 
+def _init_sqlite_engine():
+    """SQLite 엔진 및 세션 팩토리 초기화 (User, Project용, 필수)."""
+    global _sqlite_engine, _sqlite_session_local
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        _sqlite_engine = create_engine(
+            SQLALCHEMY_DATABASE_URL,
+            connect_args={"check_same_thread": False}
+        )
+        _sqlite_session_local = sessionmaker(
+            autocommit=False, autoflush=False, bind=_sqlite_engine
+        )
+    except Exception as e:
+        print(f"[db] SQLite 엔진 초기화 실패: {e}")
+
+
 _init_engine()
+_init_sqlite_engine()
 
 
 @contextmanager
@@ -70,6 +98,29 @@ def get_session():
         session.rollback()
     finally:
         session.close()
+
+
+def get_db() -> Generator:
+    """FastAPI 의존성으로 사용할 SQLite DB 세션 생성기 (User, Project용)."""
+    if _sqlite_session_local is None:
+        raise RuntimeError("SQLite 데이터베이스가 초기화되지 않았습니다.")
+    
+    db = _sqlite_session_local()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def init_db():
+    """SQLite 데이터베이스 테이블 생성 (User, Project용)."""
+    if _sqlite_engine is None:
+        raise RuntimeError("SQLite 엔진이 초기화되지 않았습니다.")
+    
+    from app.models.model_user import Base
+    from app.models.projects import ProjectDB  # noqa: F401
+    
+    Base.metadata.create_all(bind=_sqlite_engine)
 
 
 def ensure_repository(repo_url: str, repo_name: str, provider: str = "unknown") -> Optional[int]:

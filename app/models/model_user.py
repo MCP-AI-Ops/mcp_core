@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr, HttpUrl
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
+from typing import Optional
 
 Base = declarative_base()
 
@@ -22,9 +23,14 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     github_repo_url: HttpUrl
-<<<<<<< HEAD
-    primary_usage_time: str
-=======
     # primary_usage_time: str | None = None  # Optional로 변경
->>>>>>> main
     expected_users: int
+
+class UserProfile(BaseModel):
+    """유저 프로필 조회 응답 모델"""
+    email: str
+    github_repo_url: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
