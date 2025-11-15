@@ -64,7 +64,7 @@ def pick_engine(model_version: str) -> BasePredictor:
 
 
 @router.post("", response_model=PlansResponse)
-def make_plan(req: PlansRequest):
+def make_plan(req: PlansRequest):ㄴ
     """
     핵심 예측 플로우:
 
@@ -100,57 +100,33 @@ def make_plan(req: PlansRequest):
     # 4) policy 후처리
     final_pred = postprocess_predictions(raw_pred, ctx)
 
-    # 5) (더미) cost 룰
-    max_val = max((p.value for p in final_pred.predictions), default=0.0)
-    recommended_flavor = "small"
-    if max_val > 0.7:
+    # Flavor 추천 로직 개선: 예측값과 입력 컨텍스트를 함께 고려
+    max_val = max((p.value for p in final_pred.predictions), default=0)
+    avg_val = sum(p.value for p in final_pred.predictions) / len(final_pred.predictions) if final_pred.predictions else 0
+    
+    # 입력 컨텍스트 기반 기본 사이즈 결정
+    expected_users = ctx.expected_users or 100
+    base_flavor = "small"
+    if expected_users > 1000:
+        base_flavor = "medium"
+    if expected_users > 10000:
+        base_flavor = "large"
+    
+    # 예측값 기반 조정 (평균값 기준, 더 보수적)
+    recommended_flavor = base_flavor
+    if avg_val > 0.75 and base_flavor == "small":
         recommended_flavor = "medium"
-    if max_val > 0.9:
+    if avg_val > 0.85 and base_flavor == "medium":
         recommended_flavor = "large"
-    expected_cost_per_day = {
-        "small": 1.2,
-        "medium": 2.8,
-        "large": 5.5,
-    }[recommended_flavor]
+    if max_val > 0.95:  # 극단적인 피크만 large 강제
+        recommended_flavor = "large"
+    
+    expected_cost_per_day = {"small": 1.2, "medium": 2.8, "large": 5.5}[recommended_flavor]
 
     # 이상 탐지 및 Discord 알림 (비차단)
     try:
-        z_thresh = float(os.getenv("ANOMALY_Z_THRESH", "3.0"))
-        anomaly = detect_anomaly(final_pred, ctx, z_thresh=z_thresh)
-        if anomaly.get("anomaly_detected"):
-            webhook = os.getenv("DISCORD_WEBHOOK_URL") or os.getenv("DISCORD_WEBHOOK")
-            username = os.getenv("DISCORD_BOT_NAME", "MCP-dangerous")
-            avatar_url = os.getenv("DISCORD_BOT_AVATAR")
-
-            fields = {
-                "github_url": final_pred.github_url,
-                "metric": final_pred.metric_name,
-                "model_version": final_pred.model_version,
-                "z_score": f"{anomaly.get('score', 0.0):.2f}",
-                "threshold": f"{anomaly.get('threshold', 0.0):.2f}",
-                "max_pred": f"{anomaly.get('max_pred', 0.0):.2f}",
-                "hist_mean": f"{anomaly.get('hist_mean', 0.0):.2f}",
-                "hist_std": f"{anomaly.get('hist_std', 0.0):.2f}",
-                "runtime_env": getattr(ctx, 'runtime_env', None),
-                "time_slot": getattr(ctx, 'time_slot', None),
-                "expected_users": getattr(ctx, 'expected_users', None),
-            }
-
-            send_discord_alert(
-                webhook_url=webhook,
-                title="🚨 MCP Anomaly Detected",
-                description="Z-score threshold exceeded. Please investigate.",
-                fields=fields,
-                username=username,
-                avatar_url=avatar_url,
-            )
-    except Exception as _:
-        # 알림 실패는 비차단. 로그만 남긴다.
-        logging.exception("Discord alert failed (non-blocking)")
-
-    # 이상 탐지 및 Discord 알림 (비차단)
-    try:
-        z_thresh = float(os.getenv("ANOMALY_Z_THRESH", "3.0"))
+        # Z-score 임계값: 기본 5.0 (더 높게 설정하여 false positive 감소)
+        z_thresh = float(os.getenv("ANOMALY_Z_THRESH", "5.0"))
         anomaly = detect_anomaly(final_pred, ctx, z_thresh=z_thresh)
         if anomaly.get("anomaly_detected"):
             webhook = os.getenv("DISCORD_WEBHOOK_URL") or os.getenv("DISCORD_WEBHOOK")
