@@ -3,7 +3,8 @@ name: MCP Core - Build & Deploy
 on:
   push:
     branches:
-      - main, feat/#12/cicd
+      - main
+      - feat/#12/cicd
 
 jobs:
   build-and-push:
