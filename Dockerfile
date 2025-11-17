@@ -1,32 +1,54 @@
-# Python 3.11 베이스 이미지
-FROM python:3.11-slim
+########################
+# 1) Builder Stage
+########################
+FROM python:3.11-slim AS builder
 
-# 작업 디렉터리 설정
 WORKDIR /app
 
-# 시스템 의존성 설치
-RUN apt-get update && apt-get install -y \
+# Poetry 설치 & 빌드 의존성
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libmariadb-dev \
-    pkg-config \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --upgrade pip \
+    && pip install poetry
+
+# Poetry 설정 (가상환경 비활성화)
+ENV POETRY_VIRTUALENVS_CREATE=false
+
+# 의존성 파일만 복사 (캐시 활용)
+COPY pyproject.toml poetry.lock* /app/
+
+# Python 의존성 설치
+RUN poetry install --no-interaction --no-ansi --without dev
+
+# 앱 코드 복사
+COPY . /app
+
+
+########################
+# 2) Runtime Stage
+########################
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 런타임 의존성 최소화
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libmariadb-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Python 의존성 파일 복사
-COPY requirements.txt .
+# 빌드 결과 복사
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app /app
 
-# Python 패키지 설치
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 애플리케이션 코드 복사
-COPY . .
-
-# 포트 노출
 EXPOSE 8000
 
 # 헬스체크
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD python -c "import requests; requests.get('http://localhost:8000/health')"
+HEALTHCHECK --interval=25s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
 
-# 기본 명령어 (docker-compose에서 오버라이드 가능)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

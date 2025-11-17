@@ -1,0 +1,48 @@
+name: MCP Core - Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      IMAGE_NAME: ghcr.io/MCP-AI-Ops/mcp-core:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t $IMAGE_NAME .
+          docker push $IMAGE_NAME
+
+  deploy:
+    name: Deploy to EC2 (Self-hosted Runner)
+    runs-on: self-hosted
+    needs: build-and-push
+
+    steps:
+      - name: Pull latest image and restart containers
+        run: |
+          cd /opt/mcp
+          docker compose pull
+          docker compose down --remove-orphans
+          docker compose up -d --force-recreate
+          docker image prune -f
