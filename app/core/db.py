@@ -12,6 +12,7 @@ import os
 import json
 from contextlib import contextmanager
 from typing import Any, Dict, Optional
+from app.models.model_user import User
 
 DATABASE_URL = os.getenv("DATABASE_URL")  # 예: mysql+pymysql://user:pass@host/db
 
@@ -221,3 +222,5 @@ def record_alert(
         row = s.execute(text("SELECT LAST_INSERT_ID()"))
         return row.scalar()
 
+def get_db():
+    return get_session()

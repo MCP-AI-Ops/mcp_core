@@ -122,15 +122,23 @@ def detect_anomaly(
     
     # === 4. 동적 임계값 (노트북의 threshold_multiplier 방식) ===
     # z_thresh를 threshold_multiplier로 해석
-    threshold_multiplier = z_thresh / 2.5  # 5.0 → 2.0 배수
-    dynamic_threshold = threshold_multiplier
+    # threshold_multiplier = z_thresh / 2.5  # 5.0 → 2.0 배수
+    dynamic_threshold = z_thresh
     
     # === 5. 이상 판정 ===
+    condition1 = combined_score >= dynamic_threshold
+    condition2 = score_max >= (dynamic_threshold * 1.5)
+    condition3 = change_rate >= 2.0
+    condition4 = (
+        avg_pred >= (hist_mean * 3.0) and 
+        hist_std > 0 and 
+        (avg_pred - hist_mean) >= (hist_std * 10)
+    )
     # 여러 조건 중 하나라도 만족하면 이상
     is_anomaly = (
-        combined_score >= dynamic_threshold or  # 종합 점수
-        score_max >= (dynamic_threshold * 1.5) or  # 극값 스파이크
-        abs(change_rate) >= 1.0  # 100% 이상 급증
+        (condition1 and condition2) or  # 종합 점수 + 극값 동시 초과
+        condition3 or                    # 극단적 급증
+        condition4                       # 과거 대비 비정상적 예측
     )
 
     return {

@@ -21,7 +21,7 @@ class BasePredictor(ABC):
     """
 
     @abstractmethod
-    def run(self, *, github_url: str, metric_name: str, context: MCPContext, model_version: str) -> PredictionResult:
+    def run(self, *, github_url: str, metric_name: str, ctx: MCPContext, model_version: str) -> PredictionResult:
         """
         Execute prediction for the given (github_url, metric_name) under context ctx.
 

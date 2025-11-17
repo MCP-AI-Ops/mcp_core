@@ -2,7 +2,7 @@
 LSTM Predictor 모듈
 FastAPI 환경에서 LSTM 기반 24시간 예측을 수행한다.
 """
-'''
+
 from __future__ import annotations
 
 import os
@@ -12,13 +12,7 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-
-try:
-    import tensorflow as tf
-    TF_AVAILABLE = True
-except Exception:
-    tf = None
-    TF_AVAILABLE = False
+import tensorflow as tf
 
 from app.models.common import MCPContext, PredictionResult, PredictionPoint
 from app.core.predictor.base import BasePredictor
@@ -136,7 +130,13 @@ class LSTMPredictor(BasePredictor):
         except Exception as exc:
             raise PredictionError(f"특징 스케일링 실패: {exc}")
 
-        predictions = self._generate_predictions(X)
+        raw_predictions = self._generate_predictions(X)
+        
+        # 컨텍스트 기반 스케일링: 입력 컨텍스트를 반영하여 예측값 조정
+        scale_factor = self._compute_context_scale(ctx, metric_name)
+        predictions = [pred * scale_factor for pred in raw_predictions]
+        
+        print(f"[디버그] 컨텍스트 스케일 팩터: {scale_factor:.2f} (users={ctx.expected_users}, slot={ctx.time_slot})")
 
         now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
         prediction_points = [
@@ -156,6 +156,44 @@ class LSTMPredictor(BasePredictor):
         )
 
     # 내부 헬퍼
+    def _compute_context_scale(self, ctx: MCPContext, metric_name: str) -> float:
+        """
+        입력 컨텍스트를 기반으로 예측값 스케일 팩터를 계산한다.
+        모델이 평균적인 상황을 기준으로 학습되었다고 가정하고,
+        실제 사용자 수와 시간대를 반영한다.
+        """
+        expected_users = ctx.expected_users or 1000
+        
+        # 기본 스케일 (1000명 기준)
+        baseline_users = 1000.0
+        user_scale = expected_users / baseline_users
+        
+        # 시간대별 배수
+        time_multiplier = {
+            "peak": 1.5,
+            "normal": 1.0,
+            "low": 0.6,
+        }.get(ctx.time_slot, 1.0)
+        
+        # 서비스 타입별 배수
+        service_multiplier = {
+            "web": 1.0,
+            "api": 1.2,  # API는 더 높은 트래픽
+            "db": 0.8,   # DB는 상대적으로 낮음
+        }.get(ctx.service_type, 1.0)
+        
+        # 메트릭별 조정
+        if metric_name in ("avg_cpu", "avg_memory"):
+            # CPU/메모리는 사용자 수에 로그 스케일로 증가
+            user_scale = 1.0 + np.log1p(expected_users / baseline_users) * 0.5
+        
+        final_scale = user_scale * time_multiplier * service_multiplier
+        
+        # 안전장치: 너무 극단적인 값 방지
+        final_scale = np.clip(final_scale, 0.1, 10.0)
+        
+        return float(final_scale)
+
     def _generate_predictions(self, X: np.ndarray) -> list[float]:
         try:
             results = []
@@ -213,45 +251,4 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"\n[오류] 테스트 실행 중 예외: {exc}")
         raise
-'''
-# app/core/predictor/lstm_predictor.py
-
-#from __future__ import annotations
-
-from app.models.common import MCPContext
-from app.core.errors import PredictionError
-
-try:
-    import tensorflow as tf  # type: ignore
-    TF_AVAILABLE = True
-except Exception:
-    tf = None  # type: ignore
-    TF_AVAILABLE = False
-
-
-class LSTMPredictor:
-    """
-    (미래용) LSTM 기반 예측기.
-
-    DevStack VM 같이 TensorFlow가 없는 환경에서는
-    생성 시점에 바로 PredictionError 를 던지게 해서,
-    /plans 에서 baseline 으로 폴백하게 한다.
-    """
-
-    def __init__(self) -> None:
-        if not TF_AVAILABLE:
-            raise PredictionError("TensorFlow is not available in this environment")
-
-        # TODO: 나중에 실제 모델 로딩 구현
-        # self.model = tf.keras.models.load_model("...")  # type: ignore
-        self.model = None
-
-    def run(
-        self,
-        service_id: str,
-        metric_name: str,
-        ctx: MCPContext,
-        model_version: str,
-    ) -> None:
-        raise PredictionError("LSTM predictor is not implemented in this environment")
 
