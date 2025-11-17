@@ -31,7 +31,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 env_path = Path(__file__).parent.parent / '.env'
-load_dotenv(dotenv_path=env_path)
+load_dotenv(dotenv_path=env_path, encoding='utf-8')
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -69,6 +69,72 @@ class PredictRequest(BaseModel):
     """
     github_url: str
     user_input: str
+
+
+def _normalize_claude_response(parsed: dict) -> dict:
+    """
+    Claude가 반환한 값을 검증하고 정규화합니다.
+    
+    특히 service_type이 "web|api" 같은 형식으로 오는 경우를 처리합니다.
+    """
+    # service_type 정규화
+    if "service_type" in parsed:
+        service_type = str(parsed["service_type"]).strip()
+        # 파이프(|)로 구분된 경우 첫 번째 값 사용
+        if "|" in service_type:
+            service_type = service_type.split("|")[0].strip()
+        # 유효한 값인지 확인하고, 아니면 기본값 사용
+        valid_types = ["web", "api", "db"]
+        if service_type.lower() not in valid_types:
+            logger.warning(f"Invalid service_type '{service_type}', using 'web'")
+            service_type = "web"
+        parsed["service_type"] = service_type.lower()
+    
+    # time_slot 정규화
+    if "time_slot" in parsed:
+        time_slot = str(parsed["time_slot"]).strip()
+        if "|" in time_slot:
+            time_slot = time_slot.split("|")[0].strip()
+        valid_slots = ["peak", "normal", "low", "weekend"]
+        if time_slot.lower() not in valid_slots:
+            logger.warning(f"Invalid time_slot '{time_slot}', using 'normal'")
+            time_slot = "normal"
+        parsed["time_slot"] = time_slot.lower()
+    
+    # runtime_env 정규화
+    if "runtime_env" in parsed:
+        runtime_env = str(parsed["runtime_env"]).strip()
+        if "|" in runtime_env:
+            runtime_env = runtime_env.split("|")[0].strip()
+        valid_envs = ["prod", "dev"]
+        if runtime_env.lower() not in valid_envs:
+            logger.warning(f"Invalid runtime_env '{runtime_env}', using 'prod'")
+            runtime_env = "prod"
+        parsed["runtime_env"] = runtime_env.lower()
+    
+    # 숫자 타입 보장
+    if "expected_users" in parsed:
+        try:
+            parsed["expected_users"] = int(parsed["expected_users"])
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid expected_users '{parsed.get('expected_users')}', using 1000")
+            parsed["expected_users"] = 1000
+    
+    if "curr_cpu" in parsed:
+        try:
+            parsed["curr_cpu"] = float(parsed["curr_cpu"])
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid curr_cpu '{parsed.get('curr_cpu')}', using 2.0")
+            parsed["curr_cpu"] = 2.0
+    
+    if "curr_mem" in parsed:
+        try:
+            parsed["curr_mem"] = float(parsed["curr_mem"])
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid curr_mem '{parsed.get('curr_mem')}', using 4096.0")
+            parsed["curr_mem"] = 4096.0
+    
+    return parsed
 
 
 async def parse_with_claude(user_input: str, github_data: dict) -> dict:
@@ -116,25 +182,36 @@ async def parse_with_claude(user_input: str, github_data: dict) -> dict:
 - Language: {github_data.get("language")}
 - Stars: {github_data.get("stars")}
 
-Convert to JSON:
+Convert the user's natural language input to JSON format.
+
+IMPORTANT: You must return EXACTLY ONE value for each field. Do NOT use pipe (|) or multiple values.
+
+Required JSON format:
 {{
-  "service_type": "web|api|worker|data",
-  "expected_users": <number>,
-  "time_slot": "peak|normal|low|weekend",
-  "runtime_env": "prod|dev",
-  "curr_cpu": <float>,
-  "curr_mem": <float MB>,
+  "service_type": "web",
+  "expected_users": 1000,
+  "time_slot": "peak",
+  "runtime_env": "prod",
+  "curr_cpu": 2.0,
+  "curr_mem": 4096.0,
   "reasoning": "explanation"
 }}
 
-Rules:
-- CPU/Memory defaults:
-  - 100 users: 1 CPU, 2048 MB
-  - 1000 users: 2 CPU, 4096 MB
-  - 5000 users: 4 CPU, 8192 MB
-  - 10000+ users: 8 CPU, 16384 MB
+Field rules (choose ONE value only):
+- service_type: MUST be exactly one of: "web", "api", or "db" (choose the most appropriate)
+- time_slot: MUST be exactly one of: "peak", "normal", "low", or "weekend"
+- runtime_env: MUST be exactly one of: "prod" or "dev"
+- expected_users: integer number (estimated user count)
+- curr_cpu: float number (CPU cores)
+- curr_mem: float number (memory in MB)
 
-Return JSON only."""
+CPU/Memory estimation defaults:
+- 100 users: 1 CPU, 2048 MB
+- 1000 users: 2 CPU, 4096 MB
+- 5000 users: 4 CPU, 8192 MB
+- 10000+ users: 8 CPU, 16384 MB
+
+Return ONLY valid JSON, no other text."""
 
     try:
         # Claude API 호출
@@ -185,6 +262,10 @@ Return JSON only."""
             # JSON 파싱
             parsed = json.loads(text)
             logger.info(f"Parsed context: {json.dumps(parsed, ensure_ascii=False)}")
+            
+            # 값 검증 및 정규화
+            parsed = _normalize_claude_response(parsed)
+            
             return parsed
     
     except KeyError as e:
@@ -266,12 +347,13 @@ async def fetch_github_info(github_url: str) -> dict:
         }
 
 
-async def call_mcp_core(mcp_context: dict) -> dict:
+async def call_mcp_core(github_url: str, mcp_context: dict) -> dict:
     """
     MCP Core의 /plans 엔드포인트 호출
     
     Args:
-        mcp_context (dict): MCPContext 데이터
+        github_url (str): GitHub 저장소 URL
+        mcp_context (dict): MCPContext 데이터 (github_url 제외)
             - context_id: 컨텍스트 ID
             - timestamp: 타임스탬프
             - service_type: 서비스 타입
@@ -280,7 +362,6 @@ async def call_mcp_core(mcp_context: dict) -> dict:
             - expected_users: 예상 사용자 수
             - curr_cpu: 현재 CPU
             - curr_mem: 현재 메모리
-            - github_url: GitHub URL
     
     Returns:
         dict: MCP Core 예측 결과
@@ -301,7 +382,7 @@ async def call_mcp_core(mcp_context: dict) -> dict:
     
     # MCP Core 요청 본문 구성
     request_body = {
-        "github_url": mcp_context.get("github_url", "unknown"),
+        "github_url": github_url,
         "metric_name": "total_events",
         "context": mcp_context
     }
@@ -311,7 +392,9 @@ async def call_mcp_core(mcp_context: dict) -> dict:
         response = await client.post(url, json=request_body, timeout=30.0)
         
         if response.status_code != 200:
-            raise ValueError(f"MCP Core error: {response.status_code}")
+            error_detail = response.text
+            logger.error(f"MCP Core error {response.status_code}: {error_detail}")
+            raise ValueError(f"MCP Core error: {response.status_code} - {error_detail}")
         
         return response.json()
 
@@ -397,11 +480,11 @@ async def predict(request: PredictRequest):
             "expected_users": int(parsed.get("expected_users", 1000)),
             "curr_cpu": float(parsed.get("curr_cpu", 2.0)),
             "curr_mem": float(parsed.get("curr_mem", 4096.0)),
-            "github_url": request.github_url,
         }
         
         # 4. MCP Core 호출 (LSTM 예측 + 이상 탐지 + Discord 알림)
-        result = await call_mcp_core(mcp_context)
+        # github_url은 별도로 전달 (MCPContext에 포함되지 않음)
+        result = await call_mcp_core(request.github_url, mcp_context)
         
         # 5. 결과 반환
         return {

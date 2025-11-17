@@ -41,14 +41,21 @@ def create_server(
     net = conn.network.find_network(network_name, ignore_missing=False)  # type: ignore
 
     try:
+        # OpenStack API는 user_data가 None 인 것을 허용하지 않고 string 타입만 허용하는 경우가 있다.
+        # 따라서 user_data가 None 이면 아예 인자를 보내지 않는다.
+        create_kwargs: Dict[str, Any] = {
+            "name": name,
+            "image_id": image_id,
+            "flavor_id": flv.id,
+            "networks": [{"uuid": net.id}],
+            "key_name": key_name,
+            "metadata": metadata or {},
+        }
+        if user_data is not None:
+            create_kwargs["user_data"] = user_data
+
         server = conn.compute.create_server(  # type: ignore
-            name=name,
-            image_id=image_id,
-            flavor_id=flv.id,
-            networks=[{"uuid": net.id}],
-            key_name=key_name,
-            metadata=metadata or {},
-            user_data=user_data,
+            **create_kwargs
         )
         # Nova가 프로비저닝 끝날 때까지 기다리려면:
         server = conn.compute.wait_for_server(server)  # type: ignore

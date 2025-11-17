@@ -103,19 +103,22 @@ class BaselinePredictor(BasePredictor):
     ) -> PredictionResult:
         print("[경고] 데이터 부족으로 폴백 예측 실행")
 
+        expected_users = ctx.expected_users or 100
         if metric_name == "total_events":
-            base = 50.0
-            slope = 0.5
+            max_base = max (10.0, expected_users*(0.05))
+            slope = max_base * 0.01
         elif metric_name in ("avg_cpu", "avg_memory"):
-            base = 0.3
-            slope = 0.01
+            base = 0.2
+            slope = 0.005
         else:
-            base = 10.0
-            slope = 0.1
+            max_base = max (5.0, expected_users*(0.01))
+            slope = max_base * 0.02
 
         if ctx.time_slot == "peak":
+            base *= 1.5
             slope *= 2
         elif ctx.time_slot == "low":
+            base *= 0.7
             slope *= 0.5
 
         now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
