@@ -124,6 +124,7 @@ class BaselinePredictor(BasePredictor):
             slope *= 2
         elif ctx.time_slot == "low":
             base *= 0.7
+            base *= 0.7
             slope *= 0.5
 
         now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)

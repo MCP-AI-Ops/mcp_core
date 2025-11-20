@@ -9,6 +9,8 @@ Context extractor module.
 - 잘못된 입력은 ContextValidationError로 통일해서 올려보낸다.
 - 프론트엔드에서 최소한의 정보만 보내도 나머지 필드를 자동으로 채운다.
 """
+from pydantic import ValidationError
+
 
 from datetime import datetime
 from app.core.errors import ContextValidationError

@@ -49,9 +49,22 @@ app = FastAPI(
 )
 
 # CORS 설정 - 모든 오리진 허용
+DEFAULT_CORS_ORIGINS = ",".join([
+    "http://localhost:8080",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://launcha.cloud",
+    "https://api.launcha.cloud",
+])
+
+_raw_origins = os.getenv("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
+cors_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
+logging.info(f"CORS origins = {cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -73,6 +86,72 @@ class PredictRequest(BaseModel):
     """
     github_url: str
     user_input: str
+
+
+def _normalize_claude_response(parsed: dict) -> dict:
+    """
+    Claude가 반환한 값을 검증하고 정규화합니다.
+    
+    특히 service_type이 "web|api" 같은 형식으로 오는 경우를 처리합니다.
+    """
+    # service_type 정규화
+    if "service_type" in parsed:
+        service_type = str(parsed["service_type"]).strip()
+        # 파이프(|)로 구분된 경우 첫 번째 값 사용
+        if "|" in service_type:
+            service_type = service_type.split("|")[0].strip()
+        # 유효한 값인지 확인하고, 아니면 기본값 사용
+        valid_types = ["web", "api", "db"]
+        if service_type.lower() not in valid_types:
+            logger.warning(f"Invalid service_type '{service_type}', using 'web'")
+            service_type = "web"
+        parsed["service_type"] = service_type.lower()
+    
+    # time_slot 정규화
+    if "time_slot" in parsed:
+        time_slot = str(parsed["time_slot"]).strip()
+        if "|" in time_slot:
+            time_slot = time_slot.split("|")[0].strip()
+        valid_slots = ["peak", "normal", "low", "weekend"]
+        if time_slot.lower() not in valid_slots:
+            logger.warning(f"Invalid time_slot '{time_slot}', using 'normal'")
+            time_slot = "normal"
+        parsed["time_slot"] = time_slot.lower()
+    
+    # runtime_env 정규화
+    if "runtime_env" in parsed:
+        runtime_env = str(parsed["runtime_env"]).strip()
+        if "|" in runtime_env:
+            runtime_env = runtime_env.split("|")[0].strip()
+        valid_envs = ["prod", "dev"]
+        if runtime_env.lower() not in valid_envs:
+            logger.warning(f"Invalid runtime_env '{runtime_env}', using 'prod'")
+            runtime_env = "prod"
+        parsed["runtime_env"] = runtime_env.lower()
+    
+    # 숫자 타입 보장
+    if "expected_users" in parsed:
+        try:
+            parsed["expected_users"] = int(parsed["expected_users"])
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid expected_users '{parsed.get('expected_users')}', using 1000")
+            parsed["expected_users"] = 1000
+    
+    if "curr_cpu" in parsed:
+        try:
+            parsed["curr_cpu"] = float(parsed["curr_cpu"])
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid curr_cpu '{parsed.get('curr_cpu')}', using 2.0")
+            parsed["curr_cpu"] = 2.0
+    
+    if "curr_mem" in parsed:
+        try:
+            parsed["curr_mem"] = float(parsed["curr_mem"])
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid curr_mem '{parsed.get('curr_mem')}', using 4096.0")
+            parsed["curr_mem"] = 4096.0
+    
+    return parsed
 
 
 async def parse_with_claude(user_input: str, github_data: dict) -> dict:
@@ -122,6 +201,12 @@ async def parse_with_claude(user_input: str, github_data: dict) -> dict:
 
 Convert to JSON (choose ONE value for each field):
 {{
+  "service_type": "web",
+  "expected_users": 1000,
+  "time_slot": "peak",
+  "runtime_env": "prod",
+  "curr_cpu": 2.0,
+  "curr_mem": 4096.0,
   "service_type": "web",
   "expected_users": 1000,
   "time_slot": "peak",
@@ -198,6 +283,10 @@ IMPORTANT: Return ONLY valid JSON with single values (not "web|api", just "web")
             # JSON 파싱
             parsed = json.loads(text)
             logger.info(f"Parsed context: {json.dumps(parsed, ensure_ascii=False)}")
+            
+            # 값 검증 및 정규화
+            parsed = _normalize_claude_response(parsed)
+            
             return parsed
     
     except KeyError as e:
@@ -315,6 +404,7 @@ async def call_mcp_core(github_url: str, mcp_context: dict) -> dict:
     # MCP Core 요청 본문 구성
     request_body = {
         "github_url": github_url,
+        "github_url": github_url,
         "metric_name": "total_events",
         "context": mcp_context
     }
@@ -326,7 +416,9 @@ async def call_mcp_core(github_url: str, mcp_context: dict) -> dict:
         response = await client.post(url, json=request_body, timeout=30.0)
         
         if response.status_code != 200:
-            raise ValueError(f"MCP Core error: {response.status_code}")
+            error_detail = response.text
+            logger.error(f"MCP Core error {response.status_code}: {error_detail}")
+            raise ValueError(f"MCP Core error: {response.status_code} - {error_detail}")
         
         return response.json()
 

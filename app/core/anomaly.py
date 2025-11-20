@@ -152,6 +152,9 @@ def detect_anomaly(
         (condition1 and condition2) or  # 종합 점수 + 극값 동시 초과
         condition3 or                    # 극단적 급증
         condition4                       # 과거 대비 비정상적 예측
+        (condition1 and condition2) or  # 종합 점수 + 극값 동시 초과
+        condition3 or                    # 극단적 급증
+        condition4                       # 과거 대비 비정상적 예측
     )
 
     return {

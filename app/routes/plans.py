@@ -97,7 +97,14 @@ def make_plan(req: PlansRequest):
     final_pred = postprocess_predictions(raw_pred, ctx)
 
     # Flavor 추천 로직: 사용자 수와 시간대 기반
+    # Flavor 추천 로직: 사용자 수와 시간대 기반
     expected_users = ctx.expected_users or 100
+    time_slot = ctx.time_slot or "normal"
+    
+    # 1단계: 사용자 수 기반 기본 사이즈
+    if expected_users <= 500:
+        base_flavor = "small"
+    elif expected_users <= 5000:
     time_slot = ctx.time_slot or "normal"
     
     # 1단계: 사용자 수 기반 기본 사이즈
@@ -106,10 +113,31 @@ def make_plan(req: PlansRequest):
     elif expected_users <= 5000:
         base_flavor = "medium"
     else:
+    else:
         base_flavor = "large"
     
     # 2단계: 시간대 고려
+    # 2단계: 시간대 고려
     recommended_flavor = base_flavor
+    if time_slot == "peak":
+        # 피크 타임에는 한 단계 업그레이드
+        if base_flavor == "small":
+            recommended_flavor = "medium"
+        elif base_flavor == "medium":
+            recommended_flavor = "large"
+    elif time_slot == "low":
+        # 저사용 시간대는 한 단계 다운그레이드
+        if base_flavor == "large":
+            recommended_flavor = "medium"
+        elif base_flavor == "medium":
+            recommended_flavor = "small"
+    
+    # 3단계: 예측값 기반 안전장치 (극단적 케이스만)
+    max_val = max((p.value for p in final_pred.predictions), default=0)
+    avg_val = sum(p.value for p in final_pred.predictions) / len(final_pred.predictions) if final_pred.predictions else 0
+    
+    # 예측값이 비정상적으로 높으면 large 강제
+    if max_val > 1000 or avg_val > 500:
     if time_slot == "peak":
         # 피크 타임에는 한 단계 업그레이드
         if base_flavor == "small":
