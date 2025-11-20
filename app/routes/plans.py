@@ -21,7 +21,7 @@ from fastapi import APIRouter
 from datetime import datetime
 import logging
 
-from app.models.plans import PlansRequest, PlansResponse
+from app.models.plans import PlansRequest, PlansResponse, MultiPlansRequest, MultiPlansResponse
 from app.core.context_extractor import extract_context
 from app.core.router import select_route
 from app.core.predictor import BaselinePredictor, LSTMPredictor
@@ -31,7 +31,7 @@ from app.core.errors import PredictionError
 from app.core.predictor.baseline_predictor import BaselinePredictor
 from app.core.predictor.lstm_predictor import LSTMPredictor
 from app.core.anomaly import detect_anomaly
-from app.core.alerts.discord_alert import send_discord_alert
+from app.core.alerts.discord_alert import send_discord_dev_alert
 from app.core.alerts.dedupe import should_send, mark_sent
 import os
 
@@ -97,7 +97,14 @@ def make_plan(req: PlansRequest):
     final_pred = postprocess_predictions(raw_pred, ctx)
 
     # Flavor 추천 로직: 사용자 수와 시간대 기반
+    # Flavor 추천 로직: 사용자 수와 시간대 기반
     expected_users = ctx.expected_users or 100
+    time_slot = ctx.time_slot or "normal"
+    
+    # 1단계: 사용자 수 기반 기본 사이즈
+    if expected_users <= 500:
+        base_flavor = "small"
+    elif expected_users <= 5000:
     time_slot = ctx.time_slot or "normal"
     
     # 1단계: 사용자 수 기반 기본 사이즈
@@ -106,10 +113,31 @@ def make_plan(req: PlansRequest):
     elif expected_users <= 5000:
         base_flavor = "medium"
     else:
+    else:
         base_flavor = "large"
     
     # 2단계: 시간대 고려
+    # 2단계: 시간대 고려
     recommended_flavor = base_flavor
+    if time_slot == "peak":
+        # 피크 타임에는 한 단계 업그레이드
+        if base_flavor == "small":
+            recommended_flavor = "medium"
+        elif base_flavor == "medium":
+            recommended_flavor = "large"
+    elif time_slot == "low":
+        # 저사용 시간대는 한 단계 다운그레이드
+        if base_flavor == "large":
+            recommended_flavor = "medium"
+        elif base_flavor == "medium":
+            recommended_flavor = "small"
+    
+    # 3단계: 예측값 기반 안전장치 (극단적 케이스만)
+    max_val = max((p.value for p in final_pred.predictions), default=0)
+    avg_val = sum(p.value for p in final_pred.predictions) / len(final_pred.predictions) if final_pred.predictions else 0
+    
+    # 예측값이 비정상적으로 높으면 large 강제
+    if max_val > 1000 or avg_val > 500:
     if time_slot == "peak":
         # 피크 타임에는 한 단계 업그레이드
         if base_flavor == "small":
@@ -155,25 +183,42 @@ def make_plan(req: PlansRequest):
 
             # 한국어 메시지 + 중복 방지 적용
             if should_send(dedup_key):
-                fields = {
-                    "저장소": final_pred.github_url,
-                    "지표": final_pred.metric_name,
-                    "모델": final_pred.model_version,
-                    "Z-점수": f"{anomaly.get('score', 0.0):.2f}",
-                    "임계값": f"{anomaly.get('threshold', 0.0):.2f}",
-                    "예측 최대값": f"{anomaly.get('max_pred', 0.0):.2f}",
-                    "과거 평균": f"{anomaly.get('hist_mean', 0.0):.2f}",
-                    "과거 표준편차": f"{anomaly.get('hist_std', 0.0):.2f}",
-                    "실행 환경": getattr(ctx, 'runtime_env', None),
-                    "시간대": getattr(ctx, 'time_slot', None),
-                    "예상 사용자": getattr(ctx, 'expected_users', None),
+                # 컨텍스트/통계 구성
+                ctx_dict = {
+                    "runtime_env": getattr(ctx, "runtime_env", None),
+                    "time_slot": getattr(ctx, "time_slot", None),
+                    "expected_users": getattr(ctx, "expected_users", None),
+                    "service_type": getattr(ctx, "service_type", None),
+                    "model_version": str(final_pred.model_version),
                 }
 
-                send_discord_alert(
+                stats = {
+                    "hist_mean": anomaly.get("hist_mean"),
+                    "hist_std": anomaly.get("hist_std"),
+                    "hist_median": anomaly.get("hist_median"),
+                    "max_pred": anomaly.get("max_pred"),
+                    "avg_pred": anomaly.get("avg_pred"),
+                    "score": anomaly.get("score"),
+                    "score_breakdown": anomaly.get("score_breakdown"),
+                    "data_points_used": anomaly.get("data_points_used"),
+                    "outliers_removed": anomaly.get("outliers_removed"),
+                }
+
+                # 권고 조치 메시지
+                action_msg = (
+                    f"현재 추천 스펙: {recommended_flavor}. 트래픽 급증이 지속되면 임시 스케일 업을 검토하세요."
+                )
+
+                send_discord_dev_alert(
                     webhook_url=webhook,
-                    title="MCP 이상 탐지 경고",
-                    description="Z-점수 임계값을 초과했습니다. 점검이 필요합니다.",
-                    fields=fields,
+                    service_url=final_pred.github_url,
+                    metric_name=final_pred.metric_name,
+                    current_value=float(anomaly.get("score", 0.0)),
+                    threshold_value=float(anomaly.get("threshold", 0.0)),
+                    context=ctx_dict,
+                    stats=stats,
+                    action=action_msg,
+                    dedup_key=dedup_key,
                     username=username,
                     avatar_url=avatar_url,
                 )
@@ -189,3 +234,133 @@ def make_plan(req: PlansRequest):
         generated_at=datetime.utcnow(),
         notes="(더미) cost/flavor 룰 기반 산정",
     )   
+
+
+@router.post("/multi", response_model=MultiPlansResponse)
+def make_multi_plan(req: MultiPlansRequest):
+    """
+    여러 metric_name에 대해 24시간 예측을 한 번에 반환한다.
+
+    기존 /plans 계약을 깨지 않기 위해 별도의 경로(/plans/multi)와
+    응답 스키마(MultiPlansResponse)를 사용한다.
+    각 metric의 값은 기존 PlansResponse와 동일한 형태로 담긴다.
+    """
+    ctx = extract_context(req.context.model_dump())
+    model_version, path = select_route(ctx)
+    predictor = pick_engine(model_version)
+
+    results: dict[str, PlansResponse] = {}
+
+    for metric in req.metric_names:
+        try:
+            raw_pred = predictor.run(
+                github_url=req.github_url, metric_name=metric, ctx=ctx, model_version=model_version
+            )
+        except PredictionError as e:
+            logging.exception("Predictor failed for %s, falling back to baseline: %s", metric, e)
+            fallback = get_predictor("baseline")
+            raw_pred = fallback.run(
+                github_url=req.github_url, metric_name=metric, ctx=ctx, model_version=model_version
+            )
+
+        final_pred = postprocess_predictions(raw_pred, ctx)
+
+        # Flavor 추천 (단일 엔드포인트와 동일 로직 복제)
+        expected_users = ctx.expected_users or 100
+        time_slot = ctx.time_slot or "normal"
+
+        if expected_users <= 500:
+            base_flavor = "small"
+        elif expected_users <= 5000:
+            base_flavor = "medium"
+        else:
+            base_flavor = "large"
+
+        recommended_flavor = base_flavor
+        if time_slot == "peak":
+            if base_flavor == "small":
+                recommended_flavor = "medium"
+            elif base_flavor == "medium":
+                recommended_flavor = "large"
+        elif time_slot == "low":
+            if base_flavor == "large":
+                recommended_flavor = "medium"
+            elif base_flavor == "medium":
+                recommended_flavor = "small"
+
+        max_val = max((p.value for p in final_pred.predictions), default=0)
+        avg_val = sum(p.value for p in final_pred.predictions) / len(final_pred.predictions) if final_pred.predictions else 0
+        if max_val > 1000 or avg_val > 500:
+            recommended_flavor = "large"
+
+        expected_cost_per_day = {"small": 1.2, "medium": 2.8, "large": 5.5}[recommended_flavor]
+
+        # 이상 탐지 및 Discord 알림 (비차단) - 멀티 호출에서 스팸 방지를 위해 그대로 두되 dedup_key에 metric 포함
+        try:
+            z_thresh = float(os.getenv("ANOMALY_Z_THRESH", "5.0"))
+            anomaly = detect_anomaly(final_pred, ctx, z_thresh=z_thresh)
+            if anomaly.get("anomaly_detected"):
+                webhook = os.getenv("DISCORD_WEBHOOK_URL") or os.getenv("DISCORD_WEBHOOK")
+                username = os.getenv("DISCORD_BOT_NAME", "MCP-dangerous")
+                avatar_url = os.getenv("DISCORD_BOT_AVATAR")
+
+                dedup_key = "|".join(
+                    [
+                        str(final_pred.github_url),
+                        str(final_pred.metric_name),
+                        str(final_pred.model_version),
+                        str(getattr(ctx, "time_slot", "unknown")),
+                    ]
+                )
+
+                if should_send(dedup_key):
+                    ctx_dict = {
+                        "runtime_env": getattr(ctx, "runtime_env", None),
+                        "time_slot": getattr(ctx, "time_slot", None),
+                        "expected_users": getattr(ctx, "expected_users", None),
+                        "service_type": getattr(ctx, "service_type", None),
+                        "model_version": str(final_pred.model_version),
+                    }
+
+                    stats = {
+                        "hist_mean": anomaly.get("hist_mean"),
+                        "hist_std": anomaly.get("hist_std"),
+                        "hist_median": anomaly.get("hist_median"),
+                        "max_pred": anomaly.get("max_pred"),
+                        "avg_pred": anomaly.get("avg_pred"),
+                        "score": anomaly.get("score"),
+                        "score_breakdown": anomaly.get("score_breakdown"),
+                        "data_points_used": anomaly.get("data_points_used"),
+                        "outliers_removed": anomaly.get("outliers_removed"),
+                    }
+
+                    action_msg = (
+                        f"현재 추천 스펙: {recommended_flavor}. 트래픽 급증이 지속되면 임시 스케일 업을 검토하세요."
+                    )
+
+                    send_discord_dev_alert(
+                        webhook_url=webhook,
+                        service_url=final_pred.github_url,
+                        metric_name=final_pred.metric_name,
+                        current_value=float(anomaly.get("score", 0.0)),
+                        threshold_value=float(anomaly.get("threshold", 0.0)),
+                        context=ctx_dict,
+                        stats=stats,
+                        action=action_msg,
+                        dedup_key=dedup_key,
+                        username=username,
+                        avatar_url=avatar_url,
+                    )
+                    mark_sent(dedup_key)
+        except Exception:
+            logging.exception("Discord alert failed (non-blocking) [multi]")
+
+        results[metric] = PlansResponse(
+            prediction=final_pred,
+            recommended_flavor=recommended_flavor,
+            expected_cost_per_day=expected_cost_per_day,
+            generated_at=datetime.utcnow(),
+            notes="(더미) cost/flavor 룰 기반 산정",
+        )
+
+    return MultiPlansResponse(results=results, generated_at=datetime.utcnow())

@@ -121,21 +121,37 @@ def detect_anomaly(
     )
     
     # === 4. 동적 임계값 (노트북의 threshold_multiplier 방식) ===
-    # z_thresh를 threshold_multiplier로 해석
-    # threshold_multiplier = z_thresh / 2.5  # 5.0 → 2.0 배수
+    # z_thresh를 표준편차 배수로 사용
+    # 예: z_thresh=5.0 → 평균에서 5 표준편차 이상 벗어나면 이상
+    # 예: z_thresh=2.0 (테스트용) → 2 표준편차 이상
     dynamic_threshold = z_thresh
     
     # === 5. 이상 판정 ===
+    # 보수적 판정: 여러 조건 중 여러 개가 동시에 만족해야 이상
+    # 또는 극단적인 스파이크만 이상으로 판정
+    
+    # 조건 1: 종합 점수가 임계값 초과
     condition1 = combined_score >= dynamic_threshold
+    
+    # 조건 2: 극값 스파이크 (임계값의 1.5배 이상)
     condition2 = score_max >= (dynamic_threshold * 1.5)
+    
+    # 조건 3: 급격한 변화 (200% 이상 증가)
     condition3 = change_rate >= 2.0
+    
+    # 조건 4: 과거 데이터 대비 예측값이 지나치게 큼
+    # (평균의 3배 이상 && 표준편차의 10배 이상)
     condition4 = (
         avg_pred >= (hist_mean * 3.0) and 
         hist_std > 0 and 
         (avg_pred - hist_mean) >= (hist_std * 10)
     )
-    # 여러 조건 중 하나라도 만족하면 이상
+    
+    # 최종 판정: 극단적인 경우만 이상으로 분류
     is_anomaly = (
+        (condition1 and condition2) or  # 종합 점수 + 극값 동시 초과
+        condition3 or                    # 극단적 급증
+        condition4                       # 과거 대비 비정상적 예측
         (condition1 and condition2) or  # 종합 점수 + 극값 동시 초과
         condition3 or                    # 극단적 급증
         condition4                       # 과거 대비 비정상적 예측

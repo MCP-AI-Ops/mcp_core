@@ -7,39 +7,51 @@ services:
     container_name: mcp_mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: mcp_root_pass
-      MYSQL_DATABASE: mcp_autoscaler
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-admin}
+      MYSQL_DATABASE: mcp_core
       MYSQL_USER: mcp_user
-      MYSQL_PASSWORD: mcp_secret
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-wjdwlsgh03}
+      TZ: Asia/Seoul
     ports:
-      - "3308:3308"
+      - "3306:3306"
     volumes:
-      - ./db/schema_mvp.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - mcp_mysql_data:/var/lib/mysql
+      - ./db:/docker-entrypoint-initdb.d:ro
     networks:
       - mcp_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pmcp_root_pass"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-admin}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+      - --max_connections=200
+      - --innodb_buffer_pool_size=256M
 
   # FastAPI 애플리케이션 (MVP Core)
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mcp_app
+    container_name: mcp-core
     restart: unless-stopped
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: mysql+pymysql://mcp_user:mcp_secret@mysql:3308/mcp_autoscaler
-      DATA_SOURCE_BACKEND: csv
+      DATABASE_URL: mysql+pymysql://mcp_user:${MYSQL_PASSWORD:-wjdwlsgh03}@mysql:3306/mcp_core
+      DATA_SOURCE_BACKEND: ${DATA_SOURCE_BACKEND:-csv}
       CSV_DATA_PATH: /app/data/lstm_ready_cluster_data.csv
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
       DISCORD_BOT_NAME: MCP-dangerous
       ANOMALY_Z: "3.0"
+      MCP_CORE_URL: http://mcp-core:8000
+      BACKEND_API_URL: http://mcp-backend-api:8001
     volumes:
       - .:/app
       - ./models:/app/models
@@ -49,6 +61,11 @@ services:
         condition: service_healthy
     networks:
       - mcp_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # Backend API (프론트엔드 → 백엔드 → MCP Core)
@@ -56,20 +73,30 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mcp_backend
+    container_name: mcp-backend-api
     restart: unless-stopped
     ports:
       - "8001:8001"
+    env_file:
+      - .env
     environment:
-      MCP_CORE_URL: http://app:8000
+      MCP_CORE_URL: http://mcp-core:8000
+      MCP_CORE_BASE_URL: http://mcp-core:8000
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       BACKEND_PORT: "8001"
     volumes:
       - .:/app
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     networks:
       - mcp_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     command: python -m uvicorn backend_api.main:app --host 0.0.0.0 --port 8001 --reload
 
 volumes:

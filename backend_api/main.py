@@ -31,7 +31,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 env_path = Path(__file__).parent.parent / '.env'
-load_dotenv(dotenv_path=env_path, encoding='utf-8')
+# UTF-8 인코딩 문제 처리
+try:
+    load_dotenv(dotenv_path=env_path, encoding='utf-8')
+except UnicodeDecodeError:
+    load_dotenv(dotenv_path=env_path, encoding='cp949')  # Windows 기본 인코딩
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -195,12 +199,14 @@ async def parse_with_claude(user_input: str, github_data: dict) -> dict:
 - Language: {github_data.get("language")}
 - Stars: {github_data.get("stars")}
 
-Convert the user's natural language input to JSON format.
-
-IMPORTANT: You must return EXACTLY ONE value for each field. Do NOT use pipe (|) or multiple values.
-
-Required JSON format:
+Convert to JSON (choose ONE value for each field):
 {{
+  "service_type": "web",
+  "expected_users": 1000,
+  "time_slot": "peak",
+  "runtime_env": "prod",
+  "curr_cpu": 2.0,
+  "curr_mem": 4096.0,
   "service_type": "web",
   "expected_users": 1000,
   "time_slot": "peak",
@@ -210,21 +216,23 @@ Required JSON format:
   "reasoning": "explanation"
 }}
 
-Field rules (choose ONE value only):
-- service_type: MUST be exactly one of: "web", "api", or "db" (choose the most appropriate)
-- time_slot: MUST be exactly one of: "peak", "normal", "low", or "weekend"
-- runtime_env: MUST be exactly one of: "prod" or "dev"
-- expected_users: integer number (estimated user count)
-- curr_cpu: float number (CPU cores)
-- curr_mem: float number (memory in MB)
+Rules:
+- service_type: Choose ONE from ["web", "api", "db"]
+  * web: for web applications, frontend services
+  * api: for REST API, backend services
+  * db: for database, data processing services
+  
+- time_slot: Choose ONE from ["peak", "normal", "low", "weekend"]
+  
+- runtime_env: Choose ONE from ["prod", "dev"]
+  
+- CPU/Memory defaults based on expected_users:
+  * 100 users: 1 CPU, 2048 MB
+  * 1000 users: 2 CPU, 4096 MB
+  * 5000 users: 4 CPU, 8192 MB
+  * 10000+ users: 8 CPU, 16384 MB
 
-CPU/Memory estimation defaults:
-- 100 users: 1 CPU, 2048 MB
-- 1000 users: 2 CPU, 4096 MB
-- 5000 users: 4 CPU, 8192 MB
-- 10000+ users: 8 CPU, 16384 MB
-
-Return ONLY valid JSON, no other text."""
+IMPORTANT: Return ONLY valid JSON with single values (not "web|api", just "web")."""
 
     try:
         # Claude API 호출
@@ -366,7 +374,7 @@ async def call_mcp_core(github_url: str, mcp_context: dict) -> dict:
     
     Args:
         github_url (str): GitHub 저장소 URL
-        mcp_context (dict): MCPContext 데이터 (github_url 제외)
+        mcp_context (dict): MCPContext 데이터
             - context_id: 컨텍스트 ID
             - timestamp: 타임스탬프
             - service_type: 서비스 타입
@@ -396,9 +404,12 @@ async def call_mcp_core(github_url: str, mcp_context: dict) -> dict:
     # MCP Core 요청 본문 구성
     request_body = {
         "github_url": github_url,
+        "github_url": github_url,
         "metric_name": "total_events",
         "context": mcp_context
     }
+    
+    logger.info(f"Calling MCP Core with: {json.dumps(request_body, default=str, ensure_ascii=False)}")
     
     # MCP Core 호출
     async with httpx.AsyncClient() as client:
@@ -477,15 +488,25 @@ async def predict(request: PredictRequest):
         
         # 2. Claude API로 자연어 파싱
         parsed = await parse_with_claude(request.user_input, github_data)
-        logger.info(f"Extracted: {parsed['expected_users']} users, {parsed['curr_cpu']} CPU")
+        logger.info(f"Claude parsed result: {json.dumps(parsed, ensure_ascii=False)}")
         
-        # 3. MCPContext 생성
+        # service_type 검증 및 수정
+        service_type = parsed.get("service_type", "web")
+        # MCP Core는 "web", "api", "db"만 허용
+        valid_service_types = ["web", "api", "db"]
+        if service_type not in valid_service_types:
+            logger.warning(f"Invalid service_type '{service_type}', defaulting to 'web'")
+            service_type = "web"
+        
+        logger.info(f"Extracted: {parsed['expected_users']} users, {parsed['curr_cpu']} CPU, service_type: {service_type}")
+        
+        # 3. MCPContext 생성 (github_url은 context 외부에 위치)
         context_id = f"{github_data['full_name']}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
         
         mcp_context = {
             "context_id": context_id,
             "timestamp": datetime.utcnow().isoformat(),
-            "service_type": parsed.get("service_type", "web"),
+            "service_type": service_type,
             "runtime_env": parsed.get("runtime_env", "prod"),
             "time_slot": parsed.get("time_slot", "normal"),
             "weight": 1.0,
@@ -495,9 +516,12 @@ async def predict(request: PredictRequest):
             "curr_mem": float(parsed.get("curr_mem", 4096.0)),
         }
         
+        logger.info(f"MCPContext created: {json.dumps(mcp_context, default=str, ensure_ascii=False)}")
+        
+        github_url = request.github_url
+        
         # 4. MCP Core 호출 (LSTM 예측 + 이상 탐지 + Discord 알림)
-        # github_url은 별도로 전달 (MCPContext에 포함되지 않음)
-        result = await call_mcp_core(request.github_url, mcp_context)
+        result = await call_mcp_core(github_url, mcp_context)
         
         # 5. 결과 반환
         return {
