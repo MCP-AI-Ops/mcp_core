@@ -424,6 +424,7 @@ async def call_mcp_core(github_url: str, mcp_context: dict) -> dict:
 
 
 @app.post("/api/predict")
+@app.post("/predict")
 async def predict(request: PredictRequest):
     """
     완전 자동화 예측 엔드포인트
