@@ -45,9 +45,22 @@ app = FastAPI(
 )
 
 # CORS 설정 - 모든 오리진 허용
+DEFAULT_CORS_ORIGINS = ",".join([
+    "http://localhost:8080",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://launcha.cloud",
+    "https://api.launcha.cloud",
+])
+
+_raw_origins = os.getenv("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
+cors_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
+logging.info(f"CORS origins = {cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
