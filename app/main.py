@@ -36,7 +36,7 @@ app.include_router(plans.router, prefix="/plans", tags=["plans"])
 app.include_router(deploy.router, prefix="/deploy", tags=["deploy"])
 app.include_router(status.router, prefix="/status", tags=["status"])
 app.include_router(destroy.router, prefix="/destroy", tags=["destroy"])
-app.include_router(router_auth.router, prefix="/auth", tags=["auth"])
+app.include_router(router_auth.router)
 
 @app.exception_handler(Exception)
 async def unhandled_ex(request: Request, exc: Exception):
