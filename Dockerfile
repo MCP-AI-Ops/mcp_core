@@ -18,8 +18,12 @@ COPY requirements.txt .
 # Python 패키지 설치
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 애플리케이션 코드 복사
-COPY . .
+# 애플리케이션 코드 복사 (불필요한 파일 제외)
+COPY app/ ./app/
+COPY models/ ./models/
+COPY data/ ./data/
+COPY db/ ./db/
+COPY scripts/ ./scripts/
 
 # 포트 노출
 EXPOSE 8000

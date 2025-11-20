@@ -4,7 +4,6 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import plans, status, destroy
-from app.routes import router_auth
 
 app = FastAPI(title="MCP Orchestrator", version="0.1.0")
 
@@ -30,10 +29,10 @@ def health():
 
 
 app.include_router(plans.router, prefix="/plans", tags=["plans"])
-# deploy 라우터는 deploy_main.py에서 별도 포트(8001)로 제공
 app.include_router(status.router, prefix="/status", tags=["status"])
 app.include_router(destroy.router, prefix="/destroy", tags=["destroy"])
-app.include_router(router_auth.router, prefix="/auth", tags=["auth"])
+
+# Note: deploy 라우터는 backend_api/main.py에서 별도 포트(8001)로 제공
 
 @app.exception_handler(Exception)
 async def unhandled_ex(request: Request, exc: Exception):

@@ -474,7 +474,6 @@ python test_anomaly_discord.py
 | [`mcp_analyzer/README.md`](mcp_analyzer/README.md) | Claude Desktop MCP 설정 |
 | **아키텍처** |
 | [`docs/architecture.md`](docs/architecture.md) | End-to-End 구조, 라우팅 정책 |
-| [`docs/MCP_CORE_ARCHITECTURE.md`](docs/MCP_CORE_ARCHITECTURE.md) | MCP Core 상세 설계 |
 | **배포 & 운영** |
 | [`docs/deployment_guide.md`](docs/deployment_guide.md) | Docker 배포, 트러블슈팅 |
 | [`docs/persistence_mvp.md`](docs/persistence_mvp.md) | MySQL 스키마, 데이터 관리 |

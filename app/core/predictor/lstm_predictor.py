@@ -130,7 +130,13 @@ class LSTMPredictor(BasePredictor):
         except Exception as exc:
             raise PredictionError(f"특징 스케일링 실패: {exc}")
 
-        predictions = self._generate_predictions(X)
+        raw_predictions = self._generate_predictions(X)
+        
+        # 컨텍스트 기반 스케일링: 입력 컨텍스트를 반영하여 예측값 조정
+        scale_factor = self._compute_context_scale(ctx, metric_name)
+        predictions = [pred * scale_factor for pred in raw_predictions]
+        
+        print(f"[디버그] 컨텍스트 스케일 팩터: {scale_factor:.2f} (users={ctx.expected_users}, slot={ctx.time_slot})")
 
         now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
         prediction_points = [
@@ -150,6 +156,44 @@ class LSTMPredictor(BasePredictor):
         )
 
     # 내부 헬퍼
+    def _compute_context_scale(self, ctx: MCPContext, metric_name: str) -> float:
+        """
+        입력 컨텍스트를 기반으로 예측값 스케일 팩터를 계산한다.
+        모델이 평균적인 상황을 기준으로 학습되었다고 가정하고,
+        실제 사용자 수와 시간대를 반영한다.
+        """
+        expected_users = ctx.expected_users or 1000
+        
+        # 기본 스케일 (1000명 기준)
+        baseline_users = 1000.0
+        user_scale = expected_users / baseline_users
+        
+        # 시간대별 배수
+        time_multiplier = {
+            "peak": 1.5,
+            "normal": 1.0,
+            "low": 0.6,
+        }.get(ctx.time_slot, 1.0)
+        
+        # 서비스 타입별 배수
+        service_multiplier = {
+            "web": 1.0,
+            "api": 1.2,  # API는 더 높은 트래픽
+            "db": 0.8,   # DB는 상대적으로 낮음
+        }.get(ctx.service_type, 1.0)
+        
+        # 메트릭별 조정
+        if metric_name in ("avg_cpu", "avg_memory"):
+            # CPU/메모리는 사용자 수에 로그 스케일로 증가
+            user_scale = 1.0 + np.log1p(expected_users / baseline_users) * 0.5
+        
+        final_scale = user_scale * time_multiplier * service_multiplier
+        
+        # 안전장치: 너무 극단적인 값 방지
+        final_scale = np.clip(final_scale, 0.1, 10.0)
+        
+        return float(final_scale)
+
     def _generate_predictions(self, X: np.ndarray) -> list[float]:
         try:
             results = []

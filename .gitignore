@@ -11,10 +11,13 @@ env/
 .env
 # Environment variables (민감 정보)
 .env
+.env.backup
+.env.local
 
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
+demoMCPproject.ipynb
 
 # OS files
 .DS_Store
@@ -38,6 +41,22 @@ htmlcov/
 # IDE
 .vscode/
 .idea/
+
+# Deprecated/Legacy files
+schema_mcp.txt
+app/core/predictor/data_sources/schema_mcp.txt
+check_claude_api.py
+test_claude_status.py
+validate_mvp.*
+
+# Dev/Debug scripts (keep out of production)
+scripts/debug_send_discord.py
+scripts/test_improved_alert.py
+scripts/trigger_alert.py
+scripts/force_anomaly_alert.py
+scripts/generate_24h_forecast_example.py
+scripts/e2e_backend_predict.py
+scripts/inspect_lstm_metadata.py
 
 # Model and data artifacts (keep out of git unless using LFS/releases)
 models/*.h5
