@@ -25,6 +25,7 @@ from app.models.plans import PlansRequest, PlansResponse, MultiPlansRequest, Mul
 from app.core.context_extractor import extract_context
 from app.core.router import select_route
 from app.core.predictor import BaselinePredictor, LSTMPredictor
+from app.core.predictor.base import BasePredictor
 from app.core.policy import postprocess_predictions
 from app.core.errors import PredictionError
 
@@ -38,7 +39,7 @@ import os
 router = APIRouter()
 
 # 지연 생성용 레지스트리: 앱 시작 시 무거운 모델/IO를 실행하지 않기 위함
-_PREDICTORS: dict[str, object] = {}
+_PREDICTORS: dict[str, BasePredictor] = {}
 
 
 def get_predictor(kind: str):
@@ -97,15 +98,8 @@ def make_plan(req: PlansRequest):
     final_pred = postprocess_predictions(raw_pred, ctx)
 
     # Flavor 추천 로직: 사용자 수와 시간대 기반
-    # Flavor 추천 로직: 사용자 수와 시간대 기반
     expected_users = ctx.expected_users or 100
     time_slot = ctx.time_slot or "normal"
-    
-    # 1단계: 사용자 수 기반 기본 사이즈
-    if expected_users <= 500:
-        base_flavor = "small"
-    elif expected_users <= 5000:
-        time_slot = ctx.time_slot or "normal"
     
     # 1단계: 사용자 수 기반 기본 사이즈
     if expected_users <= 500:
@@ -116,29 +110,8 @@ def make_plan(req: PlansRequest):
         base_flavor = "large"
     
     # 2단계: 시간대 고려
-    # 2단계: 시간대 고려
     recommended_flavor = base_flavor
     if time_slot == "peak":
-        # 피크 타임에는 한 단계 업그레이드
-        if base_flavor == "small":
-            recommended_flavor = "medium"
-        elif base_flavor == "medium":
-            recommended_flavor = "large"
-    elif time_slot == "low":
-        # 저사용 시간대는 한 단계 다운그레이드
-        if base_flavor == "large":
-            recommended_flavor = "medium"
-        elif base_flavor == "medium":
-            recommended_flavor = "small"
-    
-    # 3단계: 예측값 기반 안전장치 (극단적 케이스만)
-    max_val = max((p.value for p in final_pred.predictions), default=0)
-    avg_val = sum(p.value for p in final_pred.predictions) / len(final_pred.predictions) if final_pred.predictions else 0
-    
-    # 예측값이 비정상적으로 높으면 large 강제
-    if max_val > 1000 or avg_val > 500:
-        recommended_flavor = "large"
-    elif time_slot == "peak":
         # 피크 타임에는 한 단계 업그레이드
         if base_flavor == "small":
             recommended_flavor = "medium"
@@ -209,8 +182,9 @@ def make_plan(req: PlansRequest):
                     f"현재 추천 스펙: {recommended_flavor}. 트래픽 급증이 지속되면 임시 스케일 업을 검토하세요."
                 )
 
-                send_discord_dev_alert(
-                    webhook_url=webhook,
+                if webhook:
+                    send_discord_dev_alert(
+                        webhook_url=webhook,
                     service_url=final_pred.github_url,
                     metric_name=final_pred.metric_name,
                     current_value=float(anomaly.get("score", 0.0)),
@@ -338,20 +312,21 @@ def make_multi_plan(req: MultiPlansRequest):
                         f"현재 추천 스펙: {recommended_flavor}. 트래픽 급증이 지속되면 임시 스케일 업을 검토하세요."
                     )
 
-                    send_discord_dev_alert(
-                        webhook_url=webhook,
-                        service_url=final_pred.github_url,
-                        metric_name=final_pred.metric_name,
-                        current_value=float(anomaly.get("score", 0.0)),
-                        threshold_value=float(anomaly.get("threshold", 0.0)),
-                        context=ctx_dict,
-                        stats=stats,
-                        action=action_msg,
-                        dedup_key=dedup_key,
-                        username=username,
-                        avatar_url=avatar_url,
-                    )
-                    mark_sent(dedup_key)
+                    if webhook:
+                        send_discord_dev_alert(
+                            webhook_url=webhook,
+                            service_url=final_pred.github_url,
+                            metric_name=final_pred.metric_name,
+                            current_value=float(anomaly.get("score", 0.0)),
+                            threshold_value=float(anomaly.get("threshold", 0.0)),
+                            context=ctx_dict,
+                            stats=stats,
+                            action=action_msg,
+                            dedup_key=dedup_key,
+                            username=username,
+                            avatar_url=avatar_url,
+                        )
+                        mark_sent(dedup_key)
         except Exception:
             logging.exception("Discord alert failed (non-blocking) [multi]")
 
