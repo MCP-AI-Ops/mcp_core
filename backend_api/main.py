@@ -523,6 +523,21 @@ async def predict(request: PredictRequest):
         
         # 4. MCP Core 호출 (LSTM 예측 + 이상 탐지 + Discord 알림)
         result = await call_mcp_core(github_url, mcp_context)
+        try:
+            # 예측 결과 핵심 요약 로그
+            pred = result.get("prediction", {})
+            preds = pred.get("predictions") or []
+            first_values = [p.get("value") for p in preds[:3]] if isinstance(preds, list) else []
+            logger.info(
+                "MCP Core prediction summary | github_url=%s model=%s recommended_flavor=%s cost_per_day=%s first_values=%s",
+                github_url,
+                pred.get("model_version"),
+                result.get("recommended_flavor"),
+                result.get("expected_cost_per_day"),
+                first_values,
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log prediction summary: {log_err}")
         
         # 5. 결과 반환
         return {
