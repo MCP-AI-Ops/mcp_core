@@ -32,6 +32,22 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
     token = create_access_token({"sub": db_user.email})
     return {"access_token": token, "token_type": "bearer"}
 
+@router.get("/profile")
+def get_profile(
+    email: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """현재 로그인한 사용자의 기본 프로필 정보를 반환합니다."""
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "email": user.email,
+        "github_repo_url": user.github_repo_url,
+        "expected_users": user.expected_users,
+        "created_at": user.created_at,
+    }
+
 @router.put("/profile")
 def update_profile(
     projectData: dict,
