@@ -105,14 +105,13 @@ def make_plan(req: PlansRequest):
     if expected_users <= 500:
         base_flavor = "small"
     elif expected_users <= 5000:
-    time_slot = ctx.time_slot or "normal"
+        time_slot = ctx.time_slot or "normal"
     
     # 1단계: 사용자 수 기반 기본 사이즈
     if expected_users <= 500:
         base_flavor = "small"
     elif expected_users <= 5000:
         base_flavor = "medium"
-    else:
     else:
         base_flavor = "large"
     
@@ -138,7 +137,8 @@ def make_plan(req: PlansRequest):
     
     # 예측값이 비정상적으로 높으면 large 강제
     if max_val > 1000 or avg_val > 500:
-    if time_slot == "peak":
+        recommended_flavor = "large"
+    elif time_slot == "peak":
         # 피크 타임에는 한 단계 업그레이드
         if base_flavor == "small":
             recommended_flavor = "medium"
