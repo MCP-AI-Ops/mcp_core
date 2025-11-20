@@ -43,10 +43,21 @@ jobs:
     needs: build-and-push
 
     steps:
-      - name: Pull latest image and restart containers
-        run: |
-          cd /opt/mcp
-          docker compose pull
-          docker compose down --remove-orphans
-          docker compose up -d --force-recreate
-          docker image prune -f
+    - name: Login to GHCR on EC2
+      run: |
+        echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u nAhYUN22 --password-stdin
+
+    - name: Pull latest image and restart containers
+      run: |
+        cd /opt/mcp
+        docker compose pull
+        docker compose down --remove-orphans
+        docker compose up -d --force-recreate
+
+    - name: Cleanup docker and runner workspace
+      run: |
+        cd /home/ubuntu/actions-runner
+        rm -rf _work/* _diag/* || true
+
+        docker image prune -af || true
+        docker builder prune -af || true
