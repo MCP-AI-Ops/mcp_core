@@ -15,7 +15,7 @@ app = FastAPI(title="MCP Orchestrator", version="0.1.0")
 # 환경 변수에서 허용할 origin을 가져오거나 기본값 사용
 cors_origins = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:8080,http://localhost:5173,http://localhost:3000"
+    "http://localhost:8080,http://localhost:5173,http://localhost:3000, https://launcha.cloud, https://api.launcha.cloud"
 ).split(",")
 
 app.add_middleware(
