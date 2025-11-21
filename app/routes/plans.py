@@ -1,5 +1,3 @@
-# app/routes/plans.py
-
 """
 /plans 라우트.
 
@@ -17,6 +15,7 @@
 즉, 여기서 리턴하는 JSON 스키마가 사실상 이 프로젝트의 "계약(Contract)"이다.
 """
 
+from calendar import week
 from fastapi import APIRouter
 from datetime import datetime
 import logging
@@ -256,11 +255,16 @@ def make_multi_plan(req: MultiPlansRequest):
                 recommended_flavor = "medium"
             elif base_flavor == "medium":
                 recommended_flavor = "large"
-        elif time_slot == "low":
+        
+        elif time_slot == "normal":
+            base_flavor = recommended_flavor
+
+        elif time_slot == "low" or time_slot == "weekend":
             if base_flavor == "large":
                 recommended_flavor = "medium"
             elif base_flavor == "medium":
                 recommended_flavor = "small"
+        
 
         max_val = max((p.value for p in final_pred.predictions), default=0)
         avg_val = sum(p.value for p in final_pred.predictions) / len(final_pred.predictions) if final_pred.predictions else 0

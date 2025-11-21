@@ -1,5 +1,3 @@
-# /app/core/context_extractor.py
-
 """
 Context extractor module.
 
@@ -20,7 +18,8 @@ from app.models.common import MCPContext
 def extract_context(raw_context: dict) -> MCPContext:
     """요청 본문에서 전달된 컨텍스트 딕셔너리를 표준 MCPContext로 변환.
 
-    - 클라이언트 간 필드 명칭 차이를 흡수 (current_users→expected_users, cpu→curr_cpu, memory→curr_mem)
+    - 클라이언트 간 필드 명칭 차이를 흡수 
+    - current_users -> expected_users, cpu->curr_cpu, memory->curr_mem)
     - timestamp 기본값 보정 (서버 시각)
     - github_url 미지정 허용 (None)
     """

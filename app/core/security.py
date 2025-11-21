@@ -1,6 +1,3 @@
-# app/core/security.py
-# 비밀번호 해시, JWT 유틸
-
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta

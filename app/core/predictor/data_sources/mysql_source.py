@@ -8,9 +8,15 @@ import numpy as np
 try:
     from sqlalchemy import create_engine, text
     from sqlalchemy.engine import Engine
+    SQLALCHEMY_AVAILABLE = True
 except Exception:  # pragma: no cover
     create_engine = None
-    Engine = None
+    Engine = None # type: ignore
+    SQLALCHEMY_AVAILABLE = False
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Engine as EngineType
 
 from .base import DataSource
 from app.core.errors import DataSourceError, DataNotFoundError
@@ -58,7 +64,7 @@ class MySQLDataSource(DataSource):
             connect_args["ssl"] = {"ca": ssl_ca}
 
         try:
-            self.engine: Engine = create_engine(
+            self.engine: "EngineType" = create_engine(
                 url,
                 pool_pre_ping=True,
                 connect_args=connect_args,
@@ -108,7 +114,7 @@ class MySQLDataSource(DataSource):
         if not rows:
             raise DataNotFoundError(f"{github_url}/{metric_name} 데이터 없음")
 
-        values = np.array([float(row["value"]) for row in rows], dtype=float)
+        values = np.array([float(row[1]) for row in rows], dtype=float)  # row[1] = value column
 
         if len(values) < hours:
             pad_len = hours - len(values)

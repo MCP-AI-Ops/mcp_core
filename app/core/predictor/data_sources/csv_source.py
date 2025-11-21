@@ -49,7 +49,7 @@ class CSVDataSource(DataSource):
 
         end_idx = len(df) - 1
         start_idx = max(0, end_idx - hours + 1)
-        data = df.iloc[start_idx : end_idx + 1][metric_name].values
+        data = np.asarray(df.iloc[start_idx : end_idx + 1][metric_name].values)
 
         if len(data) < hours:
             pad_len = hours - len(data)

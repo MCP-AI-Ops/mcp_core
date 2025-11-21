@@ -1,6 +1,4 @@
 """
-demoMCPproject.ipynb 내용을 기반으로 정리한 모델 학습 스크립트.
-
 개선 포인트
   * 학습 구간으로만 스케일러를 학습시켜 데이터 누수를 차단.
   * 결측치는 과거 값으로 채우고, 남은 값은 0으로 보정.
@@ -23,7 +21,7 @@ import pandas as pd
 import tensorflow as tf
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import RobustScaler
-from tensorflow.keras import callbacks, layers, regularizers
+from tensorflow.keras import callbacks, layers, regularizers  # type: ignore
 
 plt.switch_backend("Agg")
 
@@ -43,7 +41,7 @@ def set_random_seeds(seed: int = 42) -> None:
 
 
 class CompleteMCPPredictor:
-    """데이터 전처리와 LSTM 학습·평가를 담당하는 클래스."""
+    """데이터 전처리와 LSTM 학습, 평가를 담당하는 클래스."""
 
     def __init__(
         self,
@@ -65,7 +63,7 @@ class CompleteMCPPredictor:
         self.feature_scaler = RobustScaler()
         self.target_scaler = RobustScaler()
 
-        self.model: tf.keras.Model | None = None
+        self.model: tf.keras.Model | None = None  # type: ignore
         self.feature_names: list[str] | None = None
 
         self.df: pd.DataFrame | None = None
@@ -76,7 +74,7 @@ class CompleteMCPPredictor:
     # 데이터 로드 및 전처리
     # ------------------------------------------------------------------
     def load_and_prepare_data(self, csv_path: Path) -> pd.DataFrame:
-        """CSV를 로드하고 타깃·특징·결측치를 정리한다."""
+        """CSV를 로드하고 타깃, 특징, 결측치를 정리한다."""
         if not csv_path.exists():
             raise FileNotFoundError(f"CSV 파일을 찾을 수 없음: {csv_path}")
 
@@ -136,7 +134,7 @@ class CompleteMCPPredictor:
         cols = self.feature_names + [self.target_col]
         if self.df[cols].isna().sum().sum() > 0:
             print("[경고] 결측치를 과거 값으로 채운 뒤 0으로 보정")
-            self.df[cols] = self.df[cols].fillna(method="ffill").fillna(0.0)
+            self.df[cols] = self.df[cols].ffill().fillna(0.0)
 
     # ------------------------------------------------------------------
     # 시퀀스 생성 및 스케일링
@@ -202,7 +200,7 @@ class CompleteMCPPredictor:
         assert self.feature_names is not None
         n_features = len(self.feature_names)
 
-        self.model = tf.keras.Sequential(
+        self.model = tf.keras.Sequential(  # type: ignore
             [
                 layers.Input(shape=(self.seq_len, n_features)),
                 layers.LSTM(
@@ -238,8 +236,8 @@ class CompleteMCPPredictor:
             ]
         )
 
-        optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-        self.model.compile(optimizer=optimizer, loss="huber", metrics=["mae"])
+        optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)  # type: ignore
+        self.model.compile(optimizer=optimizer, loss="huber", metrics=["mae"])  # type: ignore
         print("[정보] 모델 컴파일 완료")
 
     def train(
@@ -249,7 +247,7 @@ class CompleteMCPPredictor:
         batch_size: int = 32,
         patience: int = 20,
         verbose: int = 1,
-    ) -> tf.keras.callbacks.History:
+    ) -> tf.keras.callbacks.History:  # type: ignore
         assert self.model is not None
 
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -288,7 +286,7 @@ class CompleteMCPPredictor:
         print("[정보] 학습 완료")
         return history
 
-    def save_history(self, history: tf.keras.callbacks.History) -> None:
+    def save_history(self, history: tf.keras.callbacks.History) -> None:  # type: ignore
         """학습 이력을 JSON과 PNG 그래프로 저장한다."""
         history_dict = history.history or {}
         epochs = list(range(1, len(history_dict.get("loss", [])) + 1))
@@ -333,7 +331,7 @@ class CompleteMCPPredictor:
             ("val", self.X_val, self.y_val),
             ("test", self.X_test, self.y_test),
         ):
-            if len(X) == 0:
+            if X is None or y_true is None or len(X) == 0:
                 continue
             preds_scaled = self.model.predict(X, verbose=0).flatten()
 
