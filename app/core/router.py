@@ -1,5 +1,3 @@
-# app/core/router.py
-
 """
 Router module.
 
@@ -15,7 +13,6 @@ Router module.
 from typing import Tuple
 from app.models.common import MCPContext
 
-# 일단 단순한 룰 먼저 생성해둠. 실제로는 어떤 케이스 있을지 좀 더 나눠봐야 할듯?
 _RULES = {
     ("prod", "peak", "web"): "web_peak_lstm_v1",
     ("prod", "normal", "web"): "web_normal_lstm_v1",

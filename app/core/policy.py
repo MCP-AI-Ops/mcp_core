@@ -1,4 +1,3 @@
-# app/core/policy.py
 """
 Prediction post-processing policy.
 
@@ -24,7 +23,7 @@ def postprocess_predictions(pred: PredictionResult, ctx: MCPContext) -> Predicti
 
     단계:
         1) 컨텍스트 weight만큼 scaling
-        2) ratio/count 메트릭에 따른 clamp 정책 적용
+        2) ratio/count 메트릭에 따른 clamp 정책 사용 -> metrics.py의 MetricMeta 활용
     """
 
     meta = get_metric_meta(pred.metric_name)

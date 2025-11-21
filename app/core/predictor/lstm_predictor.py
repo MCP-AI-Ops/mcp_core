@@ -1,8 +1,3 @@
-"""
-LSTM Predictor 모듈
-FastAPI 환경에서 LSTM 기반 24시간 예측을 수행한다.
-"""
-
 from __future__ import annotations
 
 import os
@@ -20,7 +15,7 @@ from app.core.errors import PredictionError
 
 
 class LSTMPredictor(BasePredictor):
-    """LSTM 모델을 사용해 24시간 예측을 수행한다."""
+    """LSTM 모델을 사용해 24시간 예측을 수행"""
 
     def __init__(
         self,
@@ -60,7 +55,7 @@ class LSTMPredictor(BasePredictor):
             )
 
         try:
-            self.model = tf.keras.models.load_model(self.model_path)
+            self.model = tf.keras.models.load_model(self.model_path)  # type: ignore
             print(f"[정보] 모델 로딩 완료: {self.model_path}")
         except Exception as exc:
             raise PredictionError(f"모델 로딩 실패: {exc}")
@@ -112,6 +107,9 @@ class LSTMPredictor(BasePredictor):
     ) -> PredictionResult:
         if self.df is None:
             raise PredictionError("CSV 데이터가 로드되지 않음")
+        
+        if self.sequence_length is None:
+            raise PredictionError("sequence_length가 로드되지 않음")
 
         recent_df = self.df.tail(self.sequence_length)
         if len(recent_df) < self.sequence_length:
@@ -123,6 +121,9 @@ class LSTMPredictor(BasePredictor):
             recent_data = recent_df[self.feature_names].values
         except KeyError as exc:
             raise PredictionError(f"특징 컬럼 누락: {exc}")
+        
+        if self.feature_scaler is None:
+            raise PredictionError("feature_scaler가 로드되지 않음")
 
         try:
             features_scaled = self.feature_scaler.transform(recent_data)
@@ -195,12 +196,17 @@ class LSTMPredictor(BasePredictor):
         return float(final_scale)
 
     def _generate_predictions(self, X: np.ndarray) -> list[float]:
+        if self.model is None:
+            raise PredictionError("모델이 로드되지 않음")
+        if self.target_scaler is None:
+            raise PredictionError("target_scaler가 로드되지 않음")
+        
         try:
             results = []
             current_sequence = X.copy()
 
             for _ in range(24):
-                pred_scaled = self.model.predict(current_sequence, verbose=0)[0, 0]
+                pred_scaled = self.model.predict(current_sequence, verbose=0)[0, 0]  # type: ignore
                 pred = self.target_scaler.inverse_transform([[pred_scaled]])[0, 0]
 
                 if self.use_log_transform:
@@ -231,10 +237,21 @@ if __name__ == "__main__":
     try:
         predictor = LSTMPredictor()
         print("\n테스트 예측 수행 중...")
+        
+        test_ctx = MCPContext(
+            context_id="test-ctx",
+            timestamp=datetime.utcnow(),
+            service_type="web",
+            runtime_env="prod",
+            time_slot="normal",
+            weight=1.0,
+            expected_users=1000,
+        )
+        
         result = predictor.run(
             github_url="test",
             metric_name="total_events",
-            ctx=None,
+            ctx=test_ctx,
             model_version="v1",
         )
 

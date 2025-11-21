@@ -64,7 +64,7 @@ def send_discord_dev_alert(
     username: Optional[str] = None,
     avatar_url: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """개발자 친화적 한국어 Discord 임베드 전송.
+    """한국어 Discord 임베드 전송.
 
     Parameters
     ----------
@@ -94,14 +94,14 @@ def send_discord_dev_alert(
         "unique_machines": "활성 머신 수",
     }.get(metric_name, metric_name)
 
-    # 임베드 필드 구성 (개발자 친화적 한국어)
+    # 임베드 필드 구성
     fields_list = [
         {"name": "저장소", "value": f"[{service_url.split('/')[-1]}]({service_url})", "inline": False},
         {"name": "지표", "value": metric_kr, "inline": True},
         {"name": "이상 점수 vs 임계값", "value": f"**{current_value:.2f}** / {threshold_value:.2f}", "inline": True},
     ]
 
-    # 컨텍스트 - 개발자 친화적 포맷
+    # 컨텍스트
     if context:
         ctx_parts = []
         
@@ -140,7 +140,7 @@ def send_discord_dev_alert(
                 "inline": False,
             })
 
-    # 통계 - 개발자가 이해하기 쉽게
+    # 통계
     if stats:
         stat_parts = []
         
@@ -191,7 +191,7 @@ def send_discord_dev_alert(
                 "inline": False,
             })
 
-    # 권고 조치 - 눈에 띄게
+    # 권고 조치
     if action:
         fields_list.append({
             "name": "권장 조치",
