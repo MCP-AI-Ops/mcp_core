@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import plans, status, destroy, deploy
+from app.routes import plans, status, destroy, deploy, projects
 # from app.routes import router_auth
 from dotenv import load_dotenv
 load_dotenv()
@@ -36,6 +36,7 @@ app.include_router(plans.router, prefix="/plans", tags=["plans"])
 app.include_router(deploy.router, prefix="/deploy", tags=["deploy"])
 app.include_router(status.router, prefix="/status", tags=["status"])
 app.include_router(destroy.router, prefix="/destroy", tags=["destroy"])
+app.include_router(projects.router, prefix="/projects", tags=["projects"])
 app.include_router(router_auth.router)
 
 @app.exception_handler(Exception)

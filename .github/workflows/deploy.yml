@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - feature/flavor
+      - feat/#15/project
 
 jobs:
   build-and-push:

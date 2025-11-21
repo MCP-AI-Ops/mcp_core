@@ -13,6 +13,7 @@ from app.core.openstack.deployer import create_server
 from app.core.openstack.flavor_mapper import get_openstack_flavor
 from app.core.openstack.client import get_connection
 from app.models.common import MCPContext
+from app.core import projects_store
 
 # .env 파일 로드 (OPENSTACK_* 및 MCP_CORE_URL 등)
 load_dotenv()
@@ -33,6 +34,7 @@ def deploy(req: DeployRequest) -> DeployResponse:
     """
     try:
         env_config: Dict[str, Any] = req.env_config or {}
+        service_id = env_config.get("service_id")
 
         def _safe_int(value: Any, default: int) -> int:
             try:
@@ -141,8 +143,23 @@ def deploy(req: DeployRequest) -> DeployResponse:
                 "github_url": req.github_url,
                 "plan_id": plan_id,
                 "recommended_flavor": recommended_flavor,
+                "service_id": service_id or "",
                 "deployed_at": datetime.utcnow().isoformat(),
             }
+        )
+
+        status_label = "deployed"
+        if not instance_info.status or instance_info.status.upper() not in {"ACTIVE", "RUNNING"}:
+            status_label = "building"
+
+        projects_store.upsert_project(
+            name=server_name,
+            repository=req.github_url,
+            status=status_label,
+            url=env_config.get("public_url"),
+            last_deployment=datetime.utcnow(),
+            service_id=service_id,
+            instance_id=instance_info.instance_id,
         )
         
         return DeployResponse(
