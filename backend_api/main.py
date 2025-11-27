@@ -29,6 +29,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
+from typing import Any, Dict, Optional
 
 env_path = Path(__file__).parent.parent / '.env'
 # UTF-8 인코딩 문제 처리
