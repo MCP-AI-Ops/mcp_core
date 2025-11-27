@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from app.core import projects_store
 from app.models.projects import Project, ProjectCreate, ProjectUpdate, ProjectsResponse
@@ -68,9 +68,14 @@ def update_project(project_id: int, payload: ProjectUpdate) -> Project:
     return _to_project(record)
 
 
-@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_project(project_id: int) -> None:
+@router.delete(
+    "/{project_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+def delete_project(project_id: int) -> Response:
     deleted = projects_store.delete_project(project_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
