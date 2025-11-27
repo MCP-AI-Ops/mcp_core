@@ -19,7 +19,7 @@ MCP Auto Backend API
 - BACKEND_PORT: Backend API 포트 (기본: 8001)
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
@@ -29,6 +29,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
+from typing import Any, Dict, Optional
 
 env_path = Path(__file__).parent.parent / '.env'
 # UTF-8 인코딩 문제 처리
@@ -74,6 +75,53 @@ app.add_middleware(
 MCP_CORE_URL = os.getenv("MCP_CORE_URL", "http://localhost:8000")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+
+
+def _build_core_url(path: str) -> str:
+    return f"{MCP_CORE_URL.rstrip('/')}{path}"
+
+
+async def _proxy_core_request(
+    request: Request,
+    method: str,
+    path: str,
+    payload: Optional[Dict[str, Any]] = None,
+) -> httpx.Response:
+    """Proxy helper to forward requests to MCP Core."""
+    headers: Dict[str, str] = {}
+    auth_header = request.headers.get("authorization")
+    if auth_header:
+        headers["Authorization"] = auth_header
+
+    url = _build_core_url(path)
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.request(
+                method,
+                url,
+                headers=headers,
+                json=payload if payload is not None else None,
+            )
+    except httpx.HTTPError as exc:
+        logger.error("Failed to reach MCP Core (%s %s)", method, url, exc_info=True)
+        raise HTTPException(status_code=502, detail="Failed to reach MCP Core") from exc
+
+    if response.status_code >= 400:
+        try:
+            error_body = response.json()
+            detail = error_body.get("detail", error_body)
+        except ValueError:
+            detail = response.text or "MCP Core error"
+        logger.error(
+            "MCP Core responded with %s for %s %s: %s",
+            response.status_code,
+            method,
+            path,
+            detail,
+        )
+        raise HTTPException(status_code=response.status_code, detail=detail)
+
+    return response
 
 
 class PredictRequest(BaseModel):
@@ -421,6 +469,38 @@ async def call_mcp_core(github_url: str, mcp_context: dict) -> dict:
             raise ValueError(f"MCP Core error: {response.status_code} - {error_detail}")
         
         return response.json()
+
+
+@app.get("/projects")
+async def list_projects(request: Request):
+    response = await _proxy_core_request(request, "GET", "/projects")
+    return response.json()
+
+
+@app.post("/projects", status_code=status.HTTP_201_CREATED)
+async def create_project(project: Dict[str, Any], request: Request):
+    response = await _proxy_core_request(request, "POST", "/projects", project)
+    return response.json()
+
+
+@app.get("/projects/{project_id}")
+async def get_project(project_id: int, request: Request):
+    response = await _proxy_core_request(request, "GET", f"/projects/{project_id}")
+    return response.json()
+
+
+@app.put("/projects/{project_id}")
+async def update_project(project_id: int, payload: Dict[str, Any], request: Request):
+    response = await _proxy_core_request(
+        request, "PUT", f"/projects/{project_id}", payload
+    )
+    return response.json()
+
+
+@app.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(project_id: int, request: Request):
+    await _proxy_core_request(request, "DELETE", f"/projects/{project_id}")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.post("/api/predict")
