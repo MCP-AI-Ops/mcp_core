@@ -17,6 +17,7 @@ def create_server(
     key_name: str,
     metadata: Optional[Dict[str, str]] = None,
     user_data: Optional[str] = None,
+    wait_until_active: bool = False,
 ) -> InstanceInfo:
     """
     DevStack에 VM 한 대를 생성하고, 부팅 완료될 때까지 기다린 뒤
@@ -57,8 +58,12 @@ def create_server(
         server = conn.compute.create_server(  # type: ignore
             **create_kwargs
         )
-        # Nova가 프로비저닝 끝날 때까지 기다리려면:
-        server = conn.compute.wait_for_server(server)  # type: ignore
+        if wait_until_active:
+            # VM 부팅 완료까지 블로킹
+            server = conn.compute.wait_for_server(server)  # type: ignore
+        else:
+            # 최소한의 최신 정보를 위해 한 번만 조회
+            server = conn.compute.get_server(server.id)  # type: ignore
     except Exception as e:
         logging.exception("Failed to create server")
         raise DeploymentError(f"Failed to create server: {e}")

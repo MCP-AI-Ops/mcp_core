@@ -132,6 +132,7 @@ def deploy(req: DeployRequest) -> DeployResponse:
         
         # 4. VM 생성
         server_name = f"mcp-{req.github_url.split('/')[-1]}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        wait_until_active = os.getenv("OPENSTACK_WAIT_FOR_ACTIVE", "false").lower() in {"true", "1", "yes"}
         
         instance_info = create_server(
             name=server_name,
@@ -145,7 +146,8 @@ def deploy(req: DeployRequest) -> DeployResponse:
                 "recommended_flavor": recommended_flavor,
                 "service_id": service_id or "",
                 "deployed_at": datetime.utcnow().isoformat(),
-            }
+            },
+            wait_until_active=wait_until_active,
         )
 
         status_label = "deployed"
