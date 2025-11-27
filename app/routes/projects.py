@@ -78,4 +78,3 @@ def delete_project(project_id: int) -> Response:
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
