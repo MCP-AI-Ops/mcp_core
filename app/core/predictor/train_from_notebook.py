@@ -96,22 +96,42 @@ class CompleteMCPPredictor:
         if self.target_col not in self.df.columns:
             raise ValueError(f"{self.target_col} 컬럼이 데이터에 없음")
 
-        target = self.df[self.target_col].astype(float)
-        neg_count = (target < 0).sum()
+        original_target = self.df[self.target_col].astype(float)
+        neg_count = (original_target < 0).sum()
         if neg_count > 0:
             print(f"[경고] 음수 타깃 {neg_count}개 발견, 0으로 클리핑")
-            target = target.clip(lower=0)
-
+            original_target = original_target.clip(lower=0)
+        
+        target = original_target.copy()
+        
+        # log 변환 먼저 (노트북 방식)
         if self.use_log_transform:
-            print("[정보] 타깃에 log1p 변환 적용")
+            original_mean = target.mean()
             target = np.log1p(target)
-
-        self.df[self.target_col] = target
+            self.df[f"{self.target_col}_log"] = target
+            self.target_col = f"{self.target_col}_log"  # 타겟 컬럼명 변경
+            print(f"[정보] 로그 변환 적용: {original_mean:.1f} -> {target.mean():.3f}")
+        
+        # 타겟 이상치 처리 - 95/5 percentile로 극값 클리핑 (log 변환 후)
+        if self.handle_outliers:
+            upper_bound = target.quantile(0.95)
+            lower_bound = target.quantile(0.05)
+            outliers_high = (target > upper_bound).sum()
+            outliers_low = (target < lower_bound).sum()
+            if outliers_high > 0 or outliers_low > 0:
+                target = target.clip(lower=lower_bound, upper=upper_bound)
+                self.df[self.target_col] = target
+                print(f"[정보] 극값 제한: 상위 {outliers_high}개, 하위 {outliers_low}개 조정")
+        
+        # 원본도 유지하지 않았다면 저장
+        if not self.use_log_transform:
+            self.df[self.target_col] = target
 
     def _select_features(self) -> None:
         assert self.df is not None
         numeric_cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
-        exclude = {self.target_col, "hour_offset"}
+        # 원본 타겟과 로그 변환된 타겟 모두 제외 (노트북 방식)
+        exclude = {self.target_col, "hour_offset", "total_events", "total_events_log"}
         self.feature_names = [
             col for col in numeric_cols if col not in exclude and "Unnamed" not in col
         ]
@@ -121,68 +141,94 @@ class CompleteMCPPredictor:
 
     def _handle_outliers(self) -> None:
         assert self.df is not None and self.feature_names is not None
+        total_clipped = 0
         for col in self.feature_names:
             q1 = self.df[col].quantile(0.25)
             q3 = self.df[col].quantile(0.75)
             iqr = q3 - q1
-            lower = q1 - 3 * iqr
-            upper = q3 + 3 * iqr
+            lower = q1 - 1.5 * iqr  # 표준 IQR 방식
+            upper = q3 + 1.5 * iqr
+            before = ((self.df[col] < lower) | (self.df[col] > upper)).sum()
             self.df[col] = self.df[col].clip(lower=lower, upper=upper)
+            total_clipped += before
+        if total_clipped > 0:
+            print(f"[정보] 특성 이상치 조정: {total_clipped}개 값")
 
     def _handle_missing_values(self) -> None:
         assert self.df is not None and self.feature_names is not None
         cols = self.feature_names + [self.target_col]
         if self.df[cols].isna().sum().sum() > 0:
-            print("[경고] 결측치를 과거 값으로 채운 뒤 0으로 보정")
-            self.df[cols] = self.df[cols].ffill().fillna(0.0)
+            print("[경고] 결측치 처리 중")
+            for col in cols:
+                if self.df[col].isna().sum() > 0:
+                    if 'LAG' in col:
+                        # LAG 특징: forward fill (과거 값 사용)
+                        self.df[col] = self.df[col].ffill()
+                    elif 'MA' in col:
+                        # MA 특징: backward fill 후 forward fill
+                        self.df[col] = self.df[col].bfill().ffill()
+                    else:
+                        # 기타: 선형 보간
+                        self.df[col] = self.df[col].interpolate(method='linear', limit_direction='both')
+                    # 여전히 남은 결측치는 0으로
+                    self.df[col] = self.df[col].fillna(0.0)
 
     # ------------------------------------------------------------------
-    # 시퀀스 생성 및 스케일링
+    # 시퀀스 생성 및 스케일링 (노트북 방식: 분할 후 스케일링)
     # ------------------------------------------------------------------
     def create_sequences(self) -> None:
-        """시퀀스를 생성하고 train/val/test로 나눈다."""
+        """시간 기반 분할 후 train 기준으로 스케일링하여 시퀀스 생성"""
         assert self.df is not None and self.feature_names is not None
 
-        total_rows = len(self.df)
-        n_samples = total_rows - self.seq_len
-        if n_samples <= 0:
-            raise ValueError("시퀀스를 생성하기에 데이터가 부족함")
+        print("[정보] 시간 기반 데이터 분할 시작")
+        
+        # 시간 기반 분할 (노트북 방식)
+        n = len(self.df)
+        train_end = int(n * (1 - self.test_size - self.val_size))
+        val_end = int(n * (1 - self.test_size))
 
-        test_start = int(n_samples * (1 - self.test_size))
-        val_start = int(test_start * (1 - self.val_size))
+        df_train = self.df.iloc[:train_end].copy()
+        df_val = self.df.iloc[train_end:val_end].copy()
+        df_test = self.df.iloc[val_end:].copy()
 
-        feature_end = min(val_start + self.seq_len, total_rows)
-        features = self.df[self.feature_names].values.astype(np.float32)
-        target = self.df[self.target_col].values.astype(np.float32).reshape(-1, 1)
+        print(f"[정보] 데이터 분할: Train({len(df_train)}), Val({len(df_val)}), Test({len(df_test)})")
 
-        self.feature_scaler.fit(features[:feature_end])
-        features_scaled = self.feature_scaler.transform(features)
+        # 훈련 데이터로 스케일러 학습
+        train_features = df_train[self.feature_names].values.astype(np.float32)
+        train_target = df_train[self.target_col].values.astype(np.float32).reshape(-1, 1)
 
-        self.target_scaler.fit(target[:feature_end])
-        target_scaled = self.target_scaler.transform(target).flatten()
+        self.feature_scaler.fit(train_features)
+        self.target_scaler.fit(train_target)
 
-        X_all, y_all = self._build_windows(features_scaled, target_scaled)
-
-        self.X_train = X_all[:val_start]
-        self.X_val = X_all[val_start:test_start]
-        self.X_test = X_all[test_start:]
-
-        self.y_train = y_all[:val_start]
-        self.y_val = y_all[val_start:test_start]
-        self.y_test = y_all[test_start:]
+        # 각 분할에 대해 시퀀스 생성
+        self.X_train, self.y_train = self._build_sequences(df_train)
+        self.X_val, self.y_val = self._build_sequences(df_val)
+        self.X_test, self.y_test = self._build_sequences(df_test)
 
         print(
-            "[정보] 시퀀스 분할 "
-            f"train={len(self.X_train)}, val={len(self.X_val)}, test={len(self.X_test)}"
+            "[정보] 시퀀스 생성 완료: "
+            f"Train X{self.X_train.shape}, Val X{self.X_val.shape}, Test X{self.X_test.shape}"
         )
 
-    def _build_windows(
-        self, features: np.ndarray, target: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
+        # 시퀀스가 충분한지 확인
+        if self.X_train.shape[0] < 100:
+            print(f"[경고] 훈련 시퀀스가 {self.X_train.shape[0]}개로 부족합니다. 최소 100개 권장")
+
+    def _build_sequences(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+        """단일 데이터프레임에서 시퀀스 생성"""
+        features = df[self.feature_names].values.astype(np.float32)
+        target = df[self.target_col].values.astype(np.float32).reshape(-1, 1)
+
+        # 스케일링 적용
+        features_scaled = self.feature_scaler.transform(features)
+        target_scaled = self.target_scaler.transform(target).flatten()
+
+        # 윈도우 생성
         X, y = [], []
-        for idx in range(len(features) - self.seq_len):
-            X.append(features[idx : idx + self.seq_len])
-            y.append(target[idx + self.seq_len])
+        for idx in range(len(features_scaled) - self.seq_len):
+            X.append(features_scaled[idx : idx + self.seq_len])
+            y.append(target_scaled[idx + self.seq_len])
+        
         return np.asarray(X, dtype=np.float32), np.asarray(y, dtype=np.float32)
 
     # ------------------------------------------------------------------
@@ -237,7 +283,7 @@ class CompleteMCPPredictor:
         )
 
         optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)  # type: ignore
-        self.model.compile(optimizer=optimizer, loss="huber", metrics=["mae"])  # type: ignore
+        self.model.compile(optimizer=optimizer, loss="huber", metrics=["mae", "mse"])  # type: ignore
         print("[정보] 모델 컴파일 완료")
 
     def train(
@@ -251,6 +297,13 @@ class CompleteMCPPredictor:
         assert self.model is not None
 
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # 동적 배치 크기 계산 (데이터 크기에 비례)
+        train_size = len(self.X_train)
+        dynamic_batch = min(32, max(8, train_size // 10))
+        if batch_size == 32 and train_size > 100:  # 기본값일 때만 동적 조정
+            batch_size = dynamic_batch
+            print(f"[정보] 배치 크기 동적 조정: {batch_size}")
 
         cbks = [
             callbacks.EarlyStopping(
@@ -297,6 +350,8 @@ class CompleteMCPPredictor:
             "val_loss": history_dict.get("val_loss", []),
             "train_mae": history_dict.get("mae", []),
             "val_mae": history_dict.get("val_mae", []),
+            "train_mse": history_dict.get("mse", []),
+            "val_mse": history_dict.get("val_mse", []),
         }
 
         MODELS_DIR.mkdir(parents=True, exist_ok=True)

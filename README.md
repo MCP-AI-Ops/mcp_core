@@ -322,10 +322,10 @@ DATA_SOURCE_BACKEND=csv                    # csv 또는 mysql
 MODEL_PATH=models/best_mcp_lstm_model.h5
 BASELINE_FALLBACK=true
 
-# GitHub (선택)
+# GitHub
 GITHUB_TOKEN=ghp_...                       # Rate Limit 완화
 
-# Discord (선택)
+# Discord
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 
 # MySQL (선택, DATA_SOURCE_BACKEND=mysql 시)
@@ -577,8 +577,8 @@ cat .env | grep DATABASE_URL
 - [ ] `.env` 파일 설정 완료
   - [ ] `ANTHROPIC_API_KEY` 설정
   - [ ] `DATA_SOURCE_BACKEND` 설정 (csv/mysql)
-  - [ ] `DISCORD_WEBHOOK_URL` 설정 (선택)
-  - [ ] `GITHUB_TOKEN` 설정 (선택)
+  - [ ] `DISCORD_WEBHOOK_URL` 설정
+  - [ ] `GITHUB_TOKEN` 설정
 - [ ] 모델 파일 존재 확인
   - [ ] `models/best_mcp_lstm_model.h5`
   - [ ] `models/complete_mcp_lstm.h5`
@@ -685,9 +685,7 @@ MIT License - 자유롭게 사용, 수정, 배포 가능
 ## 📞 문의
 
 - **이슈:** [GitHub Issues](https://github.com/MCP-AI-Ops/mcp_core/issues)
-- **이메일:** team@mcp-ai-ops.com (예시)
+- **이메일:** jungjin03@ajou.ac.kr
 - **문서:** 이 레포의 `docs/` 디렉터리
 
 ---
-
-**Made with ❤️ by MCP Team** | **Powered by Claude 3.5 Sonnet & TensorFlow**
