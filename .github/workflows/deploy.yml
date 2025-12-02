@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - main
-      - feat/#14/hourlyflavor
-
+      - feat/#15/projects
 jobs:
   build-and-push:
     name: Build & Push Docker Image
