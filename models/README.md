@@ -4,7 +4,7 @@
 
 ## 필수 파일
 
-MVP를 실행하려면 다음 파일이 필요합니다:
+프로젝트를 실행하려면 다음 파일이 필요합니다:
 
 1. **best_mcp_lstm_model.h5** (메인 LSTM 모델)
    - 크기: ~2-5MB
@@ -15,7 +15,6 @@ MVP를 실행하려면 다음 파일이 필요합니다:
    - 용도: Feature scaler, target scaler, feature names, sequence length 등
 
 3. **best_mcp_lstm_checkpoint.h5** (체크포인트, 선택적)
-4. **training_history.json** (학습 히스토리, 선택적)
 
 ## 모델 파일 다운로드 (Git에 포함되지 않음)
 
@@ -24,9 +23,13 @@ MVP를 실행하려면 다음 파일이 필요합니다:
 
 ### 방법 1: GitHub Release에서 다운로드 (권장)
 ```bash
-# TODO: Release 링크가 준비되면 업데이트
-# wget https://github.com/MCP-AI-Ops/mcp_core/releases/download/v1.0.0/models.zip
-# unzip models.zip -d models/
+
+# git pull origin main
+# python scripts/download_models.py
+
+# .github/workflows/deploy.yml
+- name: Download models
+  run: python scripts/download_models.py
 ```
 
 ### 방법 2: Google Drive / OneDrive 등에서 수동 다운로드
@@ -35,9 +38,7 @@ MVP를 실행하려면 다음 파일이 필요합니다:
 ### 방법 3: 직접 학습
 ```bash
 # Jupyter Notebook으로 모델 재학습
-# 1. demoMCPproject.ipynb 실행
-# 또는
-# 2. train_from_notebook.py 실행
+# train_from_notebook.py 실행
 python -m app.core.predictor.train_from_notebook
 ```
 
@@ -58,5 +59,5 @@ PredictionError: LSTM 모델을 로드할 수 없습니다
 - **프레임워크**: TensorFlow/Keras 2.x
 - **입력 시퀀스 길이**: 24 (1일)
 - **출력 길이**: 24 (다음 24시간)
-- **특징 수**: ~10개 (service_type, time_slot, cpu, memory, users 등)
+- **특징**: service_type, time_slot, cpu, memory, users 등
 - **학습 데이터**: data/lstm_ready_cluster_data.csv
