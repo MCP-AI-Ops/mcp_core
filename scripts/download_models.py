@@ -30,7 +30,7 @@ MODEL_FILES = {
 def download_file(url: str, dest_path: Path) -> bool:
     """파일 다운로드"""
     try:
-        print(f"📥 다운로드 중: {dest_path.name}...")
+        print(f"다운로드 중: {dest_path.name}...")
         response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
         
@@ -51,7 +51,7 @@ def main():
     models_dir = Path(__file__).parent.parent / "models"
     
     print("=" * 60)
-    print("🚀 MCP 모델 파일 다운로드")
+    print("MCP 모델 파일 다운로드")
     print("=" * 60)
     
     # 이미 존재하는 파일 체크
