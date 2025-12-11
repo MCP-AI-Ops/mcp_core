@@ -48,7 +48,7 @@ def download_file(url: str, dest_path: Path) -> bool:
 
 def main():
     """메인 실행"""
-    models_dir = Path(__file__).parent / "models"
+    models_dir = Path(__file__).parent.parent / "models"
     
     print("=" * 60)
     print("🚀 MCP 모델 파일 다운로드")
