@@ -45,6 +45,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app /app
 
+# 모델 파일 다운로드 (GitHub Release에서)
+RUN python scripts/download_models.py
+
 EXPOSE 8000
 
 # 헬스체크
