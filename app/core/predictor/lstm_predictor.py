@@ -1,14 +1,11 @@
 from __future__ import annotations
-
 import os
 import pickle
 from datetime import datetime, timedelta
 from typing import Optional
-
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-
 from app.models.common import MCPContext, PredictionResult, PredictionPoint
 from app.core.predictor.base import BasePredictor
 from app.core.errors import PredictionError
@@ -50,8 +47,11 @@ class LSTMPredictor(BasePredictor):
     def _load_model(self) -> None:
         if not os.path.exists(self.model_path):
             raise PredictionError(
-                "LSTM 모델 파일을 찾을 수 없습니다. LSTM_MODEL_PATH 환경변수로 경로를 지정하거나,"
-                f" 컨테이너/호스트에 '{self.model_path}'를 배치하세요."
+                f"LSTM 모델 파일을 찾을 수 없습니다: {self.model_path}\n"
+                "다음 방법 중 하나를 시도하세요:\n"
+                "  1. 모델 다운로드: python scripts/download_models.py\n"
+                "  2. 환경변수 설정: LSTM_MODEL_PATH=<경로>\n"
+                f"  3. GitHub Release에서 수동 다운로드: https://github.com/MCP-AI-Ops/mcp_core/releases/tag/v1.0.0-models"
             )
 
         try:
@@ -63,8 +63,11 @@ class LSTMPredictor(BasePredictor):
     def _load_metadata(self) -> None:
         if not os.path.exists(self.metadata_path):
             raise PredictionError(
-                "LSTM 메타데이터 파일을 찾을 수 없습니다. LSTM_METADATA_PATH 환경변수로 경로를 지정하거나,"
-                f" 컨테이너/호스트에 '{self.metadata_path}'를 배치하세요."
+                f"LSTM 메타데이터 파일을 찾을 수 없습니다: {self.metadata_path}\n"
+                "다음 방법 중 하나를 시도하세요:\n"
+                "  1. 모델 다운로드: python scripts/download_models.py\n"
+                "  2. 환경변수 설정: LSTM_METADATA_PATH=<경로>\n"
+                f"  3. GitHub Release에서 수동 다운로드: https://github.com/MCP-AI-Ops/mcp_core/releases/tag/v1.0.0-models"
             )
 
         try:
