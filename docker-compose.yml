@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-admin}
-      MYSQL_DATABASE: mcp_core
+      MYSQL_DATABASE: mcp_db
       MYSQL_USER: mcp_user
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-wjdwlsgh03}
       TZ: Asia/Seoul
@@ -54,7 +54,7 @@ services:
       BACKEND_API_URL: http://mcp-backend-api:8001
     volumes:
       - .:/app
-      - ./models:/app/models
+      # models 디렉토리는 Docker 이미지 내부 것 사용 (GitHub Release에서 다운로드됨)
       - ./data:/app/data
     depends_on:
       mysql:
