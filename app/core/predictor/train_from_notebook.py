@@ -161,10 +161,10 @@ class CompleteMCPPredictor:
             print("[경고] 결측치 처리 중")
             for col in cols:
                 if self.df[col].isna().sum() > 0:
-                    if 'LAG' in col:
+                    if 'lag' in col.lower():
                         # LAG 특징: forward fill (과거 값 사용)
                         self.df[col] = self.df[col].ffill()
-                    elif 'MA' in col:
+                    elif 'ma' in col.lower():
                         # MA 특징: backward fill 후 forward fill
                         self.df[col] = self.df[col].bfill().ffill()
                     else:
