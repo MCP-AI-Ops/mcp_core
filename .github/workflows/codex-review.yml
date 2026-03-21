@@ -1,9 +1,12 @@
-# .github/workflows/codex-review.yml
 name: Codex Auto Review
 
 on:
   pull_request:
     types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
 
 jobs:
   comment:
